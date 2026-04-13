@@ -1,0 +1,15 @@
+{
+  "books": [
+    { "id": 1, "title": "Vue 速成", "author": "张三", "stock": 12, "price": 59 },
+    { "id": 2, "title": "前端掌握", "author": "李四", "stock": 8, "price": 79 }
+  ],
+  "orders": [
+    { "id": "ORD001", "user": "用户A", "total": 120, "status": "已完成" },
+    { "id": "ORD002", "user": "用户B", "total": 45, "status": "待发货" }
+  ],
+  "users": [
+    { "id": 1, "name": "用户A", "email": "a@example.com" },
+    { "id": 2, "name": "用户B", "email": "b@example.com" }
+  ],
+  "admin": { "username": "admin", "password": "admin" }
+}
