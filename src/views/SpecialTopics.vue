@@ -19,6 +19,19 @@
 
     <!-- 专题卡片流 -->
     <div class="topics-container">
+      <!-- 加载状态 -->
+      <div v-if="loading" class="loading-state">
+        <div class="loading-spinner"></div>
+        <p>加载专题中...</p>
+      </div>
+      
+      <!-- 无数据状态 -->
+      <div v-else-if="topicList.length === 0" class="empty-state">
+        <h2>暂无专题</h2>
+        <p>专题内容正在更新中，敬请期待</p>
+      </div>
+      
+      <!-- 专题列表 -->
       <div 
         v-for="topic in topicList" 
         :key="topic.id" 
@@ -28,16 +41,12 @@
         <!-- 左侧：固定尺寸专题封面 -->
         <div class="topic-cover-section">
           <div class="cover-image-wrapper">
-            <img :src="topic.coverImage" :alt="topic.title" class="cover-img" />
+            <img :src="topic.coverImage || '/images/new.png'" :alt="topic.title" class="cover-img" @error="(e)=>e.target.src='/images/new.png'" />
             <div class="overlay-badge">{{ topic.tag }}</div>
           </div>
           <div class="topic-info">
             <h2 class="topic-title">{{ topic.title }}</h2>
             <p class="topic-desc">{{ topic.description }}</p>
-            <div class="topic-meta">
-              <span class="meta-item">📚 收录 {{ topic.books.length }} 本</span>
-              <span class="meta-item">🔥 热度 {{ topic.hotness }}</span>
-            </div>
           </div>
         </div>
 
@@ -63,45 +72,86 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import BookCard from '@/components/BookCard.vue';
-import mockData from '@/mock/bookData'; 
+import request from '@/utils/request';
 
 const bannerLoaded = ref(true);
+const topicList = ref([]);
+const loading = ref(true);
 
-// 模拟专题数据
-const topicList = computed(() => [
-  {
-    id: 'kaoyan',
-    title: '考研上岸·决胜千里',
-    tag: '备考必备',
-    color: '#3498db',
-    hotness: '98w+',
-    description: '涵盖政治、英语、数学及专业课核心教材。名师推荐，考点全覆盖，助你一战成硕。',
-    coverImage: '/images/Graduate student.png',
-    books: mockData.books.filter(b => ['中小学用书', '社科', '经管'].includes(b.category)).slice(0, 6)
-  },
-  {
-    id: 'gaokao',
-    title: '高考冲刺·金榜题名',
-    tag: '高中必刷',
-    color: '#e74c3c',
-    hotness: '120w+',
-    description: '五年高考三年模拟系列，真题解析，学霸笔记。紧扣新课标，精准提分。',
-    coverImage: '/images/gaokao.png',
-    books: mockData.books.filter(b => b.category === '中小学用书').slice(0, 6)
-  },
-  {
-    id: 'music',
-    title: '音乐殿堂·听觉盛宴',
-    tag: '艺术修养',
-    color: '#9b59b6',
-    hotness: '45w+',
-    description: '从乐理基础到大师传记，从古典鉴赏到流行文化。滋养心灵，提升艺术感知力。',
-    coverImage: '/images/music.jpg',
-    books: mockData.books.filter(b => ['文学', '历史', '其他'].includes(b.category)).slice(0, 6)
+// 从后端获取专题数据
+const fetchSpecialTopics = async () => {
+  try {
+    loading.value = true;
+    const res = await request.get('/user/book/specialtopic');
+    const data = res && res.data ? res.data : res;
+    
+    if (data) {
+      // 转换后端返回的数据格式
+      const topics = [];
+      for (const [topicStr, books] of Object.entries(data)) {
+        // 从topic字符串中提取信息
+        try {
+          // 提取id
+          const idMatch = topicStr.match(/id=(\d+)/);
+          const id = idMatch ? idMatch[1] : null;
+          
+          // 提取type
+          const typeMatch = topicStr.match(/type=(.+?), categoryId/);
+          const type = typeMatch ? typeMatch[1] : null;
+          
+          // 提取title
+          const titleMatch = topicStr.match(/title=(.+?), description/);
+          const title = titleMatch ? titleMatch[1] : null;
+          
+          // 提取description
+          const descMatch = topicStr.match(/description=(.+?), coverUrl/);
+          const description = descMatch ? descMatch[1] : null;
+          
+          // 提取coverUrl
+          const coverMatch = topicStr.match(/coverUrl=(.+?), status/);
+          let coverUrl = coverMatch ? coverMatch[1] : null;
+          // 清理coverUrl中的空格和引号
+          if (coverUrl) {
+            coverUrl = coverUrl.trim().replace(/^[`'"\s]+|[`'"\s]+$/g, '');
+          }
+          
+          if (id && title) {
+            topics.push({
+              id: id,
+              title: title,
+              tag: type || '专题推荐', // 使用后端返回的type，否则使用默认值
+              color: getRandomColor(), // 为每个专题生成随机颜色
+              description: description || '',
+              coverImage: coverUrl || '/images/new.png',
+              books: books || []
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to parse topic string:', e);
+        }
+      }
+      topicList.value = topics;
+    }
+  } catch (e) {
+    console.error('Failed to fetch special topics:', e);
+    topicList.value = [];
+  } finally {
+    loading.value = false;
   }
-]);
+};
+
+// 生成随机颜色
+const getRandomColor = () => {
+  const colors = ['#3498db', '#e74c3c', '#9b59b6', '#27ae60', '#f39c12', '#e67e22'];
+  return colors[Math.floor(Math.random() * colors.length)];
+};
+
+// 组件挂载时获取数据
+onMounted(() => {
+  fetchSpecialTopics();
+});
 </script>
 
 <style scoped>
@@ -253,6 +303,27 @@ const topicList = computed(() => [
 
   /* 【关键修复 2】添加这一行，防止容器内部换行 */
   flex-wrap: nowrap;
+  /* 隐藏滚动条但保留滚动功能 */
+  scrollbar-width: thin;
+  scrollbar-color: var(--theme-color) transparent;
+}
+
+/* 自定义滚动条样式 */
+.books-scroll-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.books-scroll-container::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.books-scroll-container::-webkit-scrollbar-thumb {
+  background: var(--theme-color);
+  border-radius: 3px;
+}
+
+.books-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #2980b9;
 }
 
 /* 【关键修复 3】确保卡片不收缩，宽度固定 */
@@ -284,6 +355,52 @@ const topicList = computed(() => [
   color: #bdc3c7;
   margin-top: 10px;
   font-style: italic;
+}
+
+/* 加载状态 */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: #fff;
+}
+
+.loading-spinner {
+  width: 50px;
+  height: 50px;
+  border: 5px solid rgba(255, 255, 255, 0.3);
+  border-top: 5px solid #3498db;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* 无数据状态 */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 400px;
+  color: #fff;
+  text-align: center;
+}
+
+.empty-state h2 {
+  font-size: 24px;
+  margin-bottom: 10px;
+}
+
+.empty-state p {
+  font-size: 16px;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* --- 响应式调整 --- */

@@ -6,6 +6,7 @@ import path from 'path' // 1. 引入 path 模块
 export default defineConfig({
   plugins: [vue()],
   server: {
+    port: 8085,
     proxy: {
       // 将以 /user 开头的请求代理到后端，避免浏览器 CORS
       '/user': {

@@ -294,3 +294,9 @@ code {
     border-right-color: var(--border);
   }
 }
+
+/* Ensure Element Plus dialogs appear above other content */
+.el-overlay,
+.el-dialog__wrapper {
+  z-index: 99999 !important;
+}

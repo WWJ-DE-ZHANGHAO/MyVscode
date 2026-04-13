@@ -18,21 +18,26 @@
     </div>
 
     <!-- 2. 动态分类书籍展示区 -->
-    <div class="category-sections">
+    <div v-if="newBooks.length === 0" class="empty-new-books">
+      <div class="empty-content">
+        <el-icon size="60"><Sugar /></el-icon>
+        <h2>暂时没有新书上架</h2>
+        <p>我们正在努力筹备更多精彩的新书，敬请期待！</p>
+        <el-button type="primary" @click="$router.push('/')">返回首页</el-button>
+      </div>
+    </div>
+    
+    <div v-else class="category-sections">
       <div 
         v-for="category in dynamicCategories" 
         :key="category.name" 
         class="category-block"
       >
-        <!-- 【修改点 1】标题样式改为居中大色块 -->
         <div class="category-header-bar">
           <h2 class="category-title">
             <span class="title-icon">{{ getCategoryIcon(category.name) }}</span>
             {{ category.name }}
-            <span class="sub-title"> (共 {{ category.books.length }} 本)</span>
           </h2>
-          <!-- 可选：如果您想加“更多”按钮，可以取消下面注释 -->
-          <!-- <a href="#" class="more-link">更多 >></a> -->
         </div>
         
         <div class="book-grid">
@@ -53,20 +58,17 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import BookCard from '@/components/BookCard.vue';
+import request from '@/utils/request';
 //import mockData from '@/mock/bookData'; 
+import { getCategoryName, categories, loadCategories } from '@/composables/useCategories';
+import { Sugar } from '@element-plus/icons-vue';
 
 const bannerLoaded = ref(true);
-const newBooks = computed(() => mockData.books.slice(0, 10));
+const newBooks = ref([]);
 
-const dynamicCategories = computed(() => {
-  const uniqueCategories = [...new Set(newBooks.value.map(book => book.category))];
-  return uniqueCategories.map(categoryName => ({
-    name: categoryName,
-    books: newBooks.value.filter(book => book.category === categoryName)
-  }));
-});
+// 分类名称使用全局缓存：getCategoryName(id)
 
 const getCategoryIcon = (categoryName) => {
   const iconMap = {
@@ -76,6 +78,56 @@ const getCategoryIcon = (categoryName) => {
   };
   return iconMap[categoryName] || '📦';
 };
+
+const dynamicCategories = computed(() => {
+  // 如果书籍使用 categoryId，则映射为分类名
+  const books = newBooks.value || [];
+  const group = {};
+  books.forEach(b => {
+    let catName = '其他'
+    if (b.categoryId) {
+      catName = getCategoryName(b.categoryId) || (categories.value || []).find(c => String(c.id) === String(b.categoryId))?.name || `分类 ${b.categoryId}`
+    } else if (b.category) {
+      catName = b.category
+    }
+    if (!group[catName]) group[catName] = [];
+    group[catName].push(b);
+  });
+  return Object.keys(group).map(name => ({ name, books: group[name] }));
+});
+
+// categories are loaded globally at app start
+
+const normalizeBook = (p) => {
+  const cover = p.coverUrl || p.cover || '';
+  return {
+    id: p.id,
+    title: p.bookName || p.title || '',
+    cover: cover || '/images/new.png',
+    price: p.price || 0,
+    description: p.description || p.detailContent || '',
+    categoryId: p.categoryId
+  };
+};
+
+const loadNewBooks = async () => {
+  try {
+    const res = await request.get('/user/book/new');
+    const arr = Array.isArray(res) ? res : (res && res.data ? res.data : (res && res.list ? res.list : []));
+    const books = (arr || []).map(normalizeBook);
+    newBooks.value = books;
+  } catch (e) {
+    console.warn('加载新书失败', e);
+    newBooks.value = [];
+  }
+}
+
+onMounted(async () => {
+  if (!categories.value || categories.value.length === 0) {
+    try { await loadCategories() } catch (e) { /* ignore */ }
+  }
+  loadNewBooks();
+});
 </script>
 
 <style scoped>
@@ -152,7 +204,7 @@ const getCategoryIcon = (categoryName) => {
   background: linear-gradient(90deg, #ffd569 0%, #fef7c8 100%); 
   padding: 15px 0;
   display: flex;
-  justify-content: space-between; /* 标题在左，更多在右 */
+  justify-content: center;
   align-items: center;
   box-sizing: border-box;
 }
@@ -161,12 +213,13 @@ const getCategoryIcon = (categoryName) => {
   font-size: 28px;
   color: #fff; /* 标题文字变白 */
   margin: 0;
-  padding-left: 40px; /* 左侧留白 */
+  padding: 0 20px;
   font-weight: 800;
   display: flex;
   align-items: center;
   gap: 10px;
   text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  justify-content: center;
 }
 
 .sub-title {
@@ -203,6 +256,44 @@ const getCategoryIcon = (categoryName) => {
   background: #fff3e0;
   /* 【修改点 2】去掉圆角 */
   border-radius: 0; 
+}
+
+/* 无新书时的提示样式 */
+.empty-new-books {
+  width: 100%;
+  max-width: 1400px;
+  margin: 40px auto;
+  padding: 60px 20px;
+  text-align: center;
+  background: linear-gradient(135deg, #fff8e1 0%, #fff3e0 100%);
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+}
+
+.empty-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+}
+
+.empty-content h2 {
+  font-size: 32px;
+  font-weight: 800;
+  color: #e65100;
+  margin: 0;
+}
+
+.empty-content p {
+  font-size: 18px;
+  color: #606266;
+  margin: 0;
+}
+
+.empty-content .el-button {
+  margin-top: 10px;
+  font-size: 16px;
+  padding: 12px 24px;
 }
 
 /* 响应式调整 */

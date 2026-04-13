@@ -67,8 +67,8 @@
             </div>
 
             <div class="rank-hover-card">
-              <div class="card-img-box">
-                <img :src="book.cover" :alt="book.title" class="card-img" />
+                <div class="card-img-box">
+                <img :src="book.cover || '/images/new.png'" :alt="book.title" class="card-img" @error="(e)=>e.target.src='/images/new.png'" />
               </div>
               <div class="card-info-box">
                 <div class="card-title">{{ book.title }}</div>
@@ -115,11 +115,42 @@
         <el-empty description="暂无推荐书籍" :image-size="80" />
       </div>
     </section>
+
+    <!-- 高分好书区域 -->
+    <section class="recommend-section"> 
+      <div class="section-header">
+        <div class="title-wrapper">
+          <h2 class="section-title">高分好书</h2>
+          <div class="title-line"></div>
+        </div>
+      </div>
+
+      <!-- 未登录提示 -->
+      <div v-if="!isLoggedIn" class="login-tip-books">
+        <el-empty description="请先登录查看高分好书" :image-size="80">
+          <el-button type="primary" @click="goToLogin">立即登录</el-button>
+        </el-empty>
+      </div>
+      
+      <!-- 已登录且书籍数据 -->
+      <div v-else-if="highScoreBooks.length > 0" class="book-grid">
+        <BookCard 
+          v-for="book in highScoreBooks" 
+          :key="book.id" 
+          :book="book" 
+        />
+      </div>
+      
+      <!-- 已登录但无书籍数据 -->
+      <div v-else class="no-data-tip">
+        <el-empty description="暂无高分好书" :image-size="80" />
+      </div>
+    </section>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import BookCard from '@/components/BookCard.vue';
 import request from '@/utils/request';
@@ -152,6 +183,9 @@ const rankingList = ref([]);
 const HOT_BOOK_LIMIT = 30;
 const allBooks = ref([]);
 const displayHotBooks = computed(() => allBooks.value.slice(0, HOT_BOOK_LIMIT));
+
+// --- 高分好书数据 ---
+const highScoreBooks = ref([]);
 
 // 当前榜单数据
 const currentRankingList = computed(() => rankingList.value);
@@ -258,17 +292,45 @@ const fetchHotBooks = async () => {
   }
 };
 
+// 获取高分好书
+const fetchHighScoreBooks = async () => {
+  if (!isLoggedIn.value) {
+    console.log('【高分】用户未登录，跳过');
+    return [];
+  }
+  
+  try {
+    console.log('【高分】开始请求 /user/book/high');
+    const highBooks = await request.get('/user/book/high');
+    console.log('【高分】响应成功:', highBooks);
+    
+    if (Array.isArray(highBooks)) {
+      console.log(`【高分】成功获取${highBooks.length}个高分好书`);
+      return highBooks;
+    }
+    console.warn('【高分】响应不是数组格式');
+    return [];
+  } catch (e) {
+    console.error('【高分】请求失败:', e.message);
+    if (e.response) {
+      console.error('【高分】错误状态码:', e.response.status);
+      console.error('【高分】错误数据:', e.response.data);
+    }
+    return [];
+  }
+};
+
 // 处理图片加载失败
 const handleImageError = (event) => {
   console.warn('图片加载失败:', event.target.src);
   
-  if (event.target.src.includes('/images/default-ad.jpg') || 
-      event.target.src.includes('/images/placeholder.jpg')) {
+  if (event.target.src.includes('/images/ad1.jpg') || 
+      event.target.src.includes('/images/new.png')) {
     return;
   }
-  
-  event.target.src = '/images/placeholder.jpg';
-  
+
+  event.target.src = '/images/new.png';
+
   event.target.onerror = () => {
     event.target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="800" height="400" viewBox="0 0 800 400"%3E%3Crect width="800" height="400" fill="%23f0f0f0"/%3E%3Ctext x="400" y="200" font-size="20" text-anchor="middle" fill="%23999"%3E图片加载失败%3C/text%3E%3C/svg%3E';
     event.target.onerror = null;
@@ -283,7 +345,7 @@ const processAdData = (ads) => {
     return {
       id: ad.id,
       title: ad.title || `广告${ad.id}`,
-      imageUrl: imageUrl || '/images/default-ad.jpg',
+      imageUrl: imageUrl || '/images/ad1.jpg',
       linkUrl: ad.targetUrl || ad.linkUrl || ''
     };
   });
@@ -295,7 +357,7 @@ const processRankData = (books) => {
     return {
       id: book.id,
       title: book.bookName || book.title || '未知书名',
-      cover: normalizeImageUrl(coverUrl) || '/images/default-cover.jpg',
+      cover: normalizeImageUrl(coverUrl) || '/images/new.png',
       author: book.author || '未知作者',
       description: book.description || '', // 新增这一行
       price: book.price || 0,
@@ -311,7 +373,7 @@ const processHotData = (books) => {
     return {
       id: book.id,
       title: book.bookName || book.title || book.name || '',
-      cover: normalizeImageUrl(coverUrl) || '/images/default-cover.jpg',
+      cover: normalizeImageUrl(coverUrl) || '/images/new.png',
       author: book.author || '',
       description: book.description || '', // 新增这一行
       price: book.price || 0,
@@ -330,39 +392,47 @@ const loadAllData = async () => {
     return;
   }
   
-  console.log('========== 开始并行加载三个请求 ==========');
+  console.log('========== 开始并行加载四个请求 ==========');
   console.log('1. 广告接口: /user/ad/list');
   console.log('2. 榜单接口: /user/book/rank');
   console.log('3. 热门接口: /user/book/hot');
+  console.log('4. 高分接口: /user/book/high');
   
   try {
-    // 三个请求并行发送
-    const [ads, ranks, hots] = await Promise.all([
+    // 四个请求并行发送
+    const [ads, ranks, hots, high] = await Promise.all([
       fetchAdvertisements(),
       fetchRankingList(),
-      fetchHotBooks()
+      fetchHotBooks(),
+      fetchHighScoreBooks()
     ]);
     
-    console.log('========== 三个请求全部完成 ==========');
+    console.log('========== 四个请求全部完成 ==========');
     console.log('广告数据原始长度:', ads?.length || 0);
     console.log('榜单数据原始长度:', ranks?.length || 0);
     console.log('热门数据原始长度:', hots?.length || 0);
+    console.log('高分数据原始长度:', high?.length || 0);
     
     // 处理数据
     advertisements.value = processAdData(ads || []);
     rankingList.value = processRankData(ranks || []);
     allBooks.value = processHotData(hots || []);
+    highScoreBooks.value = processHotData(high || []);
     
     console.log('========== 数据处理完成 ==========');
     console.log('广告处理后数量:', advertisements.value.length);
     console.log('榜单处理后数量:', rankingList.value.length);
     console.log('热门处理后数量:', allBooks.value.length);
+    console.log('高分处理后数量:', highScoreBooks.value.length);
     
     if (rankingList.value.length === 0) {
       console.warn('⚠️ 榜单数据为空，请检查后端 /user/book/rank 接口');
     }
     if (allBooks.value.length === 0) {
       console.warn('⚠️ 热门数据为空，请检查后端 /user/book/hot 接口');
+    }
+    if (highScoreBooks.value.length === 0) {
+      console.warn('⚠️ 高分好书数据为空，请检查后端 /user/book/high 接口');
     }
   } catch (error) {
     console.error('========== 加载数据失败 ==========');
@@ -383,6 +453,8 @@ onMounted(() => {
   checkLoginStatus();
   loadAllData();
 });
+
+// 不再使用全局事件监听导航点击；MainLayout 通过 key 强制刷新组件。
 
 // 事件处理函数
 const handleAdClick = (url) => {

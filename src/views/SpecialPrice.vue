@@ -9,7 +9,7 @@
       </div>
       <img 
         v-else
-        src="/images/SpecialPrice.png" 
+        src="/images/SpecialPrice.jpeg" 
         alt="极价书屋 - 精品图书特价" 
         class="banner-img"
         @load="bannerLoaded = true"
@@ -19,6 +19,10 @@
 
     <!-- 2. 特价书分类展示区 -->
     <div class="category-sections">
+      <div class="special-error" v-if="loadError">
+        <div class="err-msg">加载特价商品失败：{{ loadErrorMsg }}</div>
+        <el-button size="small" type="primary" @click="loadSpecial">重试</el-button>
+      </div>
       <div 
         v-for="(category, index) in specialCategories" 
         :key="category.id" 
@@ -29,7 +33,6 @@
           <h2 class="category-title">
             <span class="title-icon">{{ category.icon }}</span>
             {{ category.name }}
-            <span class="sub-title"> (严选 {{ category.books.length }} 本)</span>
           </h2>
           <!-- 可选：如果您想加“更多”按钮，可以取消下面注释 -->
           <!-- <a href="#" class="more-link">更多 >></a> -->
@@ -53,30 +56,81 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { ElMessage } from 'element-plus';
 import BookCard from '@/components/BookCard.vue';
-//import mockData from '@/mock/bookData'; 
+import request from '@/utils/request';
+import { getCategoryName, categories, loadCategories } from '@/composables/useCategories'
 
 const bannerLoaded = ref(true);
 
-const specialCategories = ref([
-  {
-    id: 'children', name: '少儿特价', icon: '🧸',
-    books: computed(() => mockData.books.filter(b => b.category === '少儿').slice(0, 8))
-  },
-  {
-    id: 'sci-fi', name: '科幻特价', icon: '🚀',
-    books: computed(() => mockData.books.filter(b => b.category === '科幻').slice(0, 8))
-  },
-  {
-    id: 'mystery', name: '推理特价', icon: '🕵️',
-    books: computed(() => mockData.books.filter(b => b.category === '推理').slice(0, 8))
-  },
-  {
-    id: 'literature', name: '文学特价', icon: '📚',
-    books: computed(() => mockData.books.filter(b => b.category === '文学').slice(0, 8))
+// 分类名称使用全局缓存：getCategoryName(id)
+
+// 原始特价商品列表
+const specialList = ref([]);
+
+// 根据 categoryId 分组
+const specialCategories = computed(() => {
+  const map = new Map();
+  (specialList.value || []).forEach(p => {
+    const cid = p.categoryId != null ? String(p.categoryId) : '0';
+    if (!map.has(cid)) map.set(cid, []);
+    map.get(cid).push(p);
+  });
+  // 转换为数组，保持稳定顺序（按销量和id应该已由后端排序）
+  return Array.from(map.entries()).map(([cid, items]) => {
+    const nameFromMap = getCategoryName(cid)
+    const fallbackFromList = (categories.value || []).find(c => String(c.id) === String(cid))
+    const name = nameFromMap || (fallbackFromList && fallbackFromList.name) || `分类 ${cid}`
+    return { id: cid, name, books: items.map(normalizeBook) }
+  });
+});
+
+const normalizeBook = (p) => {
+  const cover = p.coverUrl || p.cover || '';
+  return {
+    id: p.id,
+    title: p.bookName || p.title || '',
+    cover: cover && cover.startsWith('/') ? cover : (cover || '/images/new.png'),
+    price: p.price || 0,
+    description: p.description || p.detailContent || ''
+  };
+}
+
+const loadError = ref(false)
+const loadErrorMsg = ref('')
+
+const loadSpecial = async () => {
+  loadError.value = false
+  loadErrorMsg.value = ''
+  try {
+    const res = await request.get('/user/book/special')
+    // request util may unwrap; ensure array
+    const arr = Array.isArray(res) ? res : (res && res.data ? res.data : (res && res.list ? res.list : []))
+    specialList.value = (arr || [])
+  } catch (e) {
+    console.error('加载特价商品失败', e)
+    loadError.value = true
+    try {
+      const status = e?.response?.status
+      const data = e?.response?.data
+      loadErrorMsg.value = status ? `${status} ${data && (data.msg || data.message) ? (data.msg || data.message) : ''}` : (e.message || '请求失败')
+      ElMessage.error(`加载特价商品失败: ${loadErrorMsg.value}`)
+      console.error('response:', e.response)
+    } catch (inner) {
+      loadErrorMsg.value = e.message || '请求失败'
+    }
+    specialList.value = []
   }
-]);
+}
+
+onMounted(async () => {
+  // ensure categories are loaded (in case app-level preload didn't finish)
+  if (!categories.value || categories.value.length === 0) {
+    try { await loadCategories() } catch (e) { /* ignore */ }
+  }
+  loadSpecial();
+});
 </script>
 
 <style scoped>
@@ -152,7 +206,7 @@ const specialCategories = ref([
   background: linear-gradient(90deg, #ba68c8 0%, #8e24aa 100%);
   padding: 15px 0;
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   align-items: center;
   box-sizing: border-box;
 }
@@ -161,12 +215,13 @@ const specialCategories = ref([
   font-size: 28px;
   color: #fff;
   margin: 0;
-  padding-left: 40px;
+  padding: 0 20px;
   font-weight: 800;
   display: flex;
   align-items: center;
   gap: 10px;
   text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  justify-content: center;
 }
 
 .sub-title {
@@ -194,6 +249,9 @@ const specialCategories = ref([
   gap: 25px 20px;
   padding: 30px;
 }
+
+.special-error { padding: 18px; text-align: center; background: #fff6f6; border: 1px solid #ffd6d6; margin: 10px 30px; border-radius: 6px }
+.special-error .err-msg { color: #d9534f; margin-bottom: 8px }
 
 .empty-category {
   text-align: center;

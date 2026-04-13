@@ -18,9 +18,10 @@
           </video>
           <img 
             v-else 
-            :src="book.coverUrl" 
+            :src="book.coverUrl || '/images/new.png'" 
             :alt="book.bookName" 
             class="book-cover-large" 
+            @error="(e)=>e.target.src='/images/new.png'"
           />
         </div>
         <div class="play-hint" v-if="book.videoUrl">
@@ -149,18 +150,57 @@
                   class="comment-img"
                 />
               </div>
+              
+              <!-- 商家回复 -->
+              <div class="merchant-reply" v-if="comment.replyContent && comment.replyTime">
+                <div class="reply-header">
+                  <span class="reply-label">商家回复</span>
+                  <span class="reply-time">{{ formatDate(comment.replyTime) }}</span>
+                </div>
+                <div class="reply-content">{{ comment.replyContent }}</div>
+              </div>
             </div>
           </div>
           <el-empty v-else description="暂无评价" />
         </el-tab-pane>
       </el-tabs>
     </div>
+    
+    <!-- 评价弹窗 -->
+    <el-dialog v-model="showCommentDialog" title="提交评价" width="640px" :append-to-body="true">
+      <div style="margin-bottom:8px">
+        <el-rate v-model="commentForm.score" :colors="['#F7BA2A','#F7BA2A','#F7BA2A']" />
+      </div>
+      <el-form label-width="0">
+        <el-form-item>
+          <el-input type="textarea" :rows="6" placeholder="写下你的评价" v-model="commentForm.content" />
+        </el-form-item>
+        <el-form-item label="上传图片">
+          <el-upload
+            action="/user/upload/upload"
+            list-type="picture-card"
+            :on-success="handleUploadSuccess"
+            :on-remove="handleRemoveImage"
+            :limit="5"
+            accept="image/*"
+          >
+            <i class="el-icon-plus"></i>
+          </el-upload>
+          <div style="color:#999;font-size:12px;margin-top:8px">请上传至少一张图片（最多5张）</div>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showCommentDialog = false">取消</el-button>
+        <el-button type="primary" @click="submitComment">提交评价</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed, watch } from 'vue';
 import request from '@/utils/request';
+import { loadAddressList as apiLoadAddressList } from '@/composables/useAddress';
 const emit = defineEmits(['add-to-cart']);
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
@@ -178,6 +218,16 @@ const activeTab = ref('detail'); // 当前选项卡
 
 // 默认头像
 const defaultAvatar = 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png';
+
+// 评论弹窗状态与表单
+const showCommentDialog = ref(false)
+const commentForm = ref({
+  OrderDetailId: null,
+  content: '',
+  images: [],
+  score: 5
+})
+const uploadingCommentImages = ref(false)
 
 // 计算是否有货（库存>0 视为有货）
 const hasStock = computed(() => {
@@ -256,26 +306,72 @@ const formatDate = (dateStr) => {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
 };
 
-// 解析评价图片（JSON 数组字符串 -> 数组，兼容单张图片或空值）
+// 解析评价图片：兼容后端返回的数组、JSON 字符串或单个 URL
 const parseImages = (images) => {
   if (!images) return [];
-  try {
-    const parsed = JSON.parse(images);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch (e) {
-    // 如果不是 JSON，可能是单个 URL
-    return [images];
+  // 如果已经是数组，直接返回
+  if (Array.isArray(images)) return images;
+  // 如果是字符串，尝试解析 JSON 字符串，否则当作单个 URL 返回
+  if (typeof images === 'string') {
+    try {
+      const parsed = JSON.parse(images);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch (e) {
+      return [images];
+    }
   }
+  // 其他类型，转换为字符串后返回
+  return [String(images)];
 };
 
 // 购买逻辑
-const buyNow = () => {
+const buyNow = async () => {
   if (!hasStock.value) {
     ElMessage.warning('商品已售罄，无法购买');
     return;
   }
-  console.log('立即购买', book.value.id, quantity.value);
-  router.push(`/order/create?bookId=${book.value.id}&quantity=${quantity.value}`);
+  try {
+    const id = book.value.id;
+    // 后端当前期望通过请求体接收（@RequestBody UserBuyNow），因此使用 POST 到 /user/book/buy
+    const res = await request.post('/user/book/buy', { productId: id, quantity: quantity.value });
+    const vo = res || {};
+    const item = {
+      id: vo.productId || id,
+      title: vo.bookName || book.value.bookName || book.value.title,
+      price: Number(vo.price || vo.totalPrice || book.value.price) || 0,
+      quantity: vo.quantity || quantity.value,
+      cover: vo.coverUrl || book.value.coverUrl || book.value.cover || '/images/new.png',
+      description: vo.description || book.value.description || ''
+    };
+    // 保存为支持的结构：{ buyNows: [...], activityDiscount, originalTotal }
+    const checkoutPayload = {
+      buyNows: [item],
+      activityDiscount: (vo && typeof vo.activityDiscount !== 'undefined') ? vo.activityDiscount : null,
+      originalTotal: (vo && typeof vo.originalTotal !== 'undefined') ? vo.originalTotal : null
+    };
+    sessionStorage.setItem('checkoutItems', JSON.stringify(checkoutPayload));
+    // 在跳转前请求地址列表，确保后端返回最新地址供结算页使用，并把数据缓存到 sessionStorage 供结算页快速渲染
+    try {
+      const addresses = await apiLoadAddressList();
+      if (Array.isArray(addresses) && addresses.length) {
+        sessionStorage.setItem('prefetchedAddressList', JSON.stringify(addresses));
+      }
+    } catch (e) { console.warn('预加载地址失败', e); }
+
+    // 预取运费模板列表并缓存，供结算页快速渲染运费方案
+    try {
+      const tpl = await request.get('/user/shipping-template/list');
+      if (Array.isArray(tpl) && tpl.length) {
+        sessionStorage.setItem('prefetchedShippingTemplates', JSON.stringify(tpl));
+      }
+    } catch (e) {
+      console.warn('预加载运费模板失败', e);
+    }
+    router.push({ name: 'CreateOrder', query: { source: 'buyNow' } });
+  } catch (e) {
+    console.error('立即购买接口调用失败', e);
+    ElMessage.error('无法获取商品信息，请稍后重试');
+  }
 };
 
 // 加入购物车
@@ -325,11 +421,71 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+  // 若路由带有 comment=1，则打开评价弹窗（携带 orderDetailId）
+  if (route.query && route.query.comment === '1' && route.query.orderDetailId) {
+    // 填充表单并打开
+    commentForm.value.OrderDetailId = Number(route.query.orderDetailId)
+    showCommentDialog.value = true
+    // 切换到评价 tab
+    activeTab.value = 'comment'
+  }
 });
 
 onUnmounted(() => {
   forceHideTooltip();
 });
+
+// 监听路由 query 变化，若用户通过“去评价”跳转过来，打开弹窗
+watch(() => route.query, (q) => {
+  if (q && q.comment === '1' && q.orderDetailId) {
+    commentForm.value.OrderDetailId = Number(q.orderDetailId)
+    showCommentDialog.value = true
+    activeTab.value = 'comment'
+  }
+})
+
+// 上传成功处理（EditProfileDialog 中的逻辑参考）
+const handleUploadSuccess = (response, file) => {
+  // 后端可能返回字符串或 { data: path }
+  const path = (typeof response === 'string') ? response : (response && (response.data || response.filePath || response.url) ? (response.data || response.filePath || response.url) : null)
+  if (path) {
+    commentForm.value.images.push(path)
+    ElMessage.success('图片上传成功')
+  } else {
+    ElMessage.success('图片上传完成（请确认返回值）')
+  }
+}
+
+const handleRemoveImage = (file, fileList) => {
+  // file.response 可能包含已上传的路径
+  const resp = file.response
+  const path = resp ? (typeof resp === 'string' ? resp : (resp.data || resp.filePath || resp.url)) : (file.url || file.responseUrl)
+  if (path) commentForm.value.images = commentForm.value.images.filter(p => p !== path)
+}
+
+const submitComment = async () => {
+  try {
+    if (!commentForm.value.content || commentForm.value.content.trim().length === 0) { ElMessage.error('评价内容不能为空'); return }
+    if (!commentForm.value.images || commentForm.value.images.length === 0) { ElMessage.error('请上传至少一张图片'); return }
+    const payload = {
+      // 注意：后端 DTO 字段名为 OrderDetailId（首字母大写），按此字段发送
+      OrderDetailId: Number(commentForm.value.OrderDetailId),
+      content: commentForm.value.content,
+      images: commentForm.value.images,
+      score: Number(commentForm.value.score || 5)
+    }
+    await request.post('/user/comment/submint', payload)
+    ElMessage.success('提交评价成功')
+    showCommentDialog.value = false
+    // 清除路由中的 comment 参数，避免重复弹出
+    router.replace({ query: Object.assign({}, route.query, { comment: undefined, orderDetailId: undefined }) })
+    // 重新拉取评价列表
+    await fetchComments(book.value.id)
+  } catch (e) {
+    console.error('submitComment failed', e)
+    ElMessage.error('提交评价失败')
+  }
+}
 </script>
 
 <style scoped>
@@ -616,5 +772,38 @@ onUnmounted(() => {
   object-fit: cover;
   border-radius: 4px;
   cursor: pointer;
+}
+
+/* 商家回复样式 */
+.merchant-reply {
+  margin-top: 15px;
+  padding: 15px;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  border-left: 4px solid #409eff;
+}
+
+.reply-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.reply-label {
+  font-weight: 600;
+  color: #409eff;
+  font-size: 14px;
+}
+
+.reply-time {
+  font-size: 12px;
+  color: #909399;
+}
+
+.reply-content {
+  line-height: 1.5;
+  color: #606266;
+  font-size: 14px;
 }
 </style>

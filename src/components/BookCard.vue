@@ -3,12 +3,12 @@
     <div class="book-card-container">
       <!-- 图片区域 -->
       <div class="img-wrapper">
-        <img :src="book.cover" :alt="book.title" class="book-cover" loading="lazy" />
+        <img :src="getCoverUrl(book)" :alt="book.title" class="book-cover" loading="lazy" @error="(e)=>e.target.src='/images/new.png'" />
       </div>
 
       <!-- 信息区域 -->
       <div class="card-info">
-        <h3 class="card-title">{{ book.title }}</h3>
+        <h3 class="card-title">{{ book.bookName || book.title || '未知书名' }}</h3>
         <p v-if="book.description" class="card-description">
           {{ formatDescription(book.description) }}
         </p>
@@ -25,6 +25,21 @@ defineProps({
     required: true
   }
 });
+
+// 获取书籍封面URL
+const getCoverUrl = (book) => {
+  if (!book) return '/images/new.png';
+  
+  // 尝试从不同的字段获取封面URL
+  let coverUrl = book.cover || book.coverUrl || book.bookImage || book.image || null;
+  
+  if (coverUrl) {
+    // 清理URL中的空格和引号
+    coverUrl = coverUrl.trim().replace(/^[`'"\s]+|[`'"\s]+$/g, '');
+  }
+  
+  return coverUrl || '/images/new.png';
+};
 
 const formatDescription = (desc) => {
   if (!desc) return '';

@@ -99,7 +99,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import { Warning } from '@element-plus/icons-vue';
@@ -288,6 +288,20 @@ onMounted(() => {
     });
   }
 });
+
+// 监听顶部导航点击事件，若点击的是本页则触发刷新
+const onNavClickHandler = (e) => {
+  const p = e && e.detail && e.detail.path ? e.detail.path : null;
+  if (!p) return;
+  if (p === '/category') {
+    if (checkLoginStatus()) {
+      fetchCategories();
+      fetchBooks();
+    }
+  }
+}
+
+// 不再使用全局事件监听导航点击；MainLayout 通过 key 强制刷新组件。
 </script>
 
 <style scoped>

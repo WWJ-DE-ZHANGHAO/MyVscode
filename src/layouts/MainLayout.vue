@@ -9,15 +9,15 @@
         </div>
         
         <nav class="nav-menu">
-          <router-link to="/" class="nav-item" active-class="active" exact-active-class="active">首页</router-link>
+          <router-link to="/" class="nav-item" active-class="active" exact-active-class="active" @click="onNavClick('/')">首页</router-link>
           
           <!-- 全部书籍 -->
-          <router-link to="/category" class="nav-item" active-class="active" exact-active-class="active">全部书籍</router-link>
+          <router-link to="/category" class="nav-item" active-class="active" exact-active-class="active" @click="onNavClick('/category')">全部书籍</router-link>
           
           <!-- 【新增】特价、新书、专题 -->
-          <router-link to="/special-price" class="nav-item" active-class="active" exact-active-class="active">特价</router-link>
-          <router-link to="/new-books" class="nav-item" active-class="active" exact-active-class="active">新书</router-link>
-          <router-link to="/topics" class="nav-item" active-class="active" exact-active-class="active">专题</router-link>
+          <router-link to="/special-price" class="nav-item" active-class="active" exact-active-class="active" @click="onNavClick('/special-price')">特价</router-link>
+          <router-link to="/new-books" class="nav-item" active-class="active" exact-active-class="active" @click="onNavClick('/new-books')">新书</router-link>
+          <router-link to="/topics" class="nav-item" active-class="active" exact-active-class="active" @click="onNavClick('/topics')">专题</router-link>
         </nav>
       </div>
       
@@ -59,7 +59,7 @@
     <main class="content-wrapper">
       <router-view v-slot="{ Component }">
         <transition name="fade" mode="out-in">
-          <component :is="Component" @add-to-cart="addToCart" />
+          <component :is="Component" :key="$route.path + '-' + refreshKey" @add-to-cart="addToCart" />
         </transition>
       </router-view>
     </main>
@@ -88,6 +88,9 @@ import BackToTop from '@/components/BackToTop.vue';
 
 const router = useRouter();
 const route = useRoute();
+
+// 用于强制重新挂载路由组件（当用户点击已在页面上的导航时触发刷新）
+const refreshKey = ref(0);
 
 const cartItems = ref([]);
 const searchQuery = ref('');
@@ -167,7 +170,7 @@ const handleServiceClick = () => {
 
 const logout = () => {
   try {
-    sessionStorage.removeItem('authToken');
+    sessionStorage.removeItem('token');
     sessionStorage.removeItem('currentUser');
   } catch (e) {}
   currentUser.value = null;
@@ -209,6 +212,15 @@ const handleAvatarClick = () => {
 // 监听路由变化，关闭购物车面板
 // 监听路由变化（之前用于关闭侧边面板，现为页面跳转无需处理）
 watch(() => route.path, () => {});
+
+// 导航点击：若点击的是当前路由，增加 `refreshKey` 强制重新挂载页面组件
+const onNavClick = (path) => {
+  try {
+    if (route.path === path) {
+      refreshKey.value = (refreshKey.value || 0) + 1
+    }
+  } catch (e) { /* ignore */ }
+}
 </script>
 
 <style scoped>

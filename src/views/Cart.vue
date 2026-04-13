@@ -26,7 +26,7 @@
 					<!-- 2. 商品信息 (图片+标题+简介) -->
 					<div class="col col-info">
 						<div class="info-inner" @click="openDetail(item)">
-							<img :src="item.cover" :alt="item.title" class="thumb" />
+							<img :src="item.cover" :alt="item.title" class="thumb" @error="(e)=>e.target.src='/images/new.png'" />
 							<div class="info-text">
 								<div class="title">{{ item.title }}</div>
 								<!-- 这里修改了：显示简介字段 -->
@@ -67,7 +67,7 @@
 					<!-- 6. 操作 -->
 					<div class="col col-action">
 						<div class="action-box">
-							<el-button type="text" class="btn-delete" @click="removeFromCart(item.id)">删除</el-button>
+							<el-button type="link" class="btn-delete" @click="removeFromCart(item.id)">删除</el-button>
 						</div>
 					</div>
 				</div>
@@ -77,7 +77,7 @@
 		<!-- 底部结算栏 -->
 		<div class="cart-footer">
 			<div class="footer-left">
-				<el-button type="text" @click="batchDelete" :disabled="!selectedIds.length" class="btn-batch">批量删除</el-button>
+				<el-button type="link" @click="batchDelete" :disabled="!selectedIds.length" class="btn-batch">批量删除</el-button>
 				<span class="selected-info">已选择 <strong>{{ selectedCount }}</strong> 件商品</span>
 			</div>
 
@@ -93,6 +93,7 @@
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import request from '@/utils/request';
+import { loadAddressList as apiLoadAddressList } from '@/composables/useAddress';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
@@ -176,9 +177,53 @@ const checkout = () => {
         return;
     }
 	ElMessageBox.confirm(`确认结算 ${selectedCount.value} 件商品，合计 ¥${selectedTotal.value.toFixed(2)}？`, '确认订单', { confirmButtonText: '去结算', cancelButtonText: '再看看', type: 'warning' })
-		.then(() => {
-            ElMessage.success('正在跳转到结算页...');
-        })
+		.then(async () => {
+			// 调用后端 checkout 接口，传入已选购物车 id 列表，后端返回 UserCartVo
+			try {
+				const ids = selectedIds.value;
+				// 后端接口为 @PostMapping("/checkout") 并通过 @RequestParam("shippingAddressIds") 接收 id 列表
+				// 使用 POST 请求并把 ids 放在 params（query string），以确保后端能通过 @RequestParam 正确接收
+				const res = await request.post('/user/shopping-cart/checkout', null, { params: { shippingAddressIds: ids } });
+				// res 应为 UserCartVo: { shoppingCartIds: [...], buyNowVos: [...] }
+								// 后端可能返回 UserCartVo: { buyNows: [...], activityDiscount, originalTotal }
+								let checkoutPayload = null;
+								if (res && (res.activityDiscount != null || res.originalTotal != null || res.buyNows)) {
+									// 使用后端返回的结构，保证把优惠和原价一并保存
+									checkoutPayload = {
+										buyNows: Array.isArray(res.buyNows) ? res.buyNows : (res.buyNows || []),
+										activityDiscount: typeof res.activityDiscount !== 'undefined' ? res.activityDiscount : null,
+										originalTotal: typeof res.originalTotal !== 'undefined' ? res.originalTotal : null
+									};
+								} else {
+									const buyNowVos = selectedItems.value.map(i => ({ productId: i.productId || i.id, quantity: i.quantity || 1, price: i.price || 0, totalPrice: (i.quantity||1)*(i.price||0), bookName: i.title, coverUrl: i.cover, description: i.productDescription || '' }));
+									checkoutPayload = { buyNows: buyNowVos, activityDiscount: null, originalTotal: null };
+								}
+								// 保存供 Checkout 页面渲染使用（Checkout 支持对象或数组结构）
+								sessionStorage.setItem('checkoutItems', JSON.stringify(checkoutPayload));
+				// 保存购物车 id 列表以便提交订单时使用
+				sessionStorage.setItem('checkoutShoppingCartIds', JSON.stringify(ids));
+				ElMessage.success('正在跳转到结算页...');
+								// 在跳转前请求地址列表，确保结算页能尽快显示地址，并缓存结果供结算页快速渲染
+								try {
+									const addresses = await apiLoadAddressList();
+									if (Array.isArray(addresses) && addresses.length) {
+										sessionStorage.setItem('prefetchedAddressList', JSON.stringify(addresses));
+									}
+								} catch (e) { console.warn('预加载地址失败', e); }
+
+								// 预取运费模板并缓存，供结算页快速渲染运费模板选择
+								try {
+									const tpl = await request.get('/user/shipping-template/list');
+									if (Array.isArray(tpl) && tpl.length) {
+										sessionStorage.setItem('prefetchedShippingTemplates', JSON.stringify(tpl));
+									}
+								} catch (e) { console.warn('预加载运费模板失败', e); }
+				router.push({ name: 'CreateOrder', query: { source: 'cart' } });
+			} catch (err) {
+				console.error('购物车结算接口调用失败', err);
+				ElMessage.error('结算失败，请重试');
+			}
+		})
 		.catch(() => {});
 };
 
