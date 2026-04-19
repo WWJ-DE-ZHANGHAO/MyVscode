@@ -4,28 +4,33 @@
     <div class="book-detail-container" v-if="book">
       <!-- 左侧：媒体展示区 -->
       <div class="media-section">
-        <div class="media-player-wrapper">
-          <video 
-            v-if="book.videoUrl" 
-            ref="videoPlayer"
-            controls 
-            class="book-video"
-            preload="metadata"
-            :poster="book.coverUrl" 
-          >
-            <source :src="book.videoUrl" type="video/mp4" />
-            您的浏览器不支持 Video 标签。
-          </video>
+        <!-- 主图展示 -->
+        <div class="main-image-wrapper">
           <img 
-            v-else 
-            :src="book.coverUrl || '/images/new.png'" 
+            :src="currentImage" 
             :alt="book.bookName" 
-            class="book-cover-large" 
+            class="main-image" 
             @error="(e)=>e.target.src='/images/new.png'"
           />
         </div>
-        <div class="play-hint" v-if="book.videoUrl">
-          <i class="el-icon-video-play"></i> 点击播放书籍介绍视频
+        <!-- 缩略图轮播 -->
+        <div class="thumbnail-carousel" v-if="sliderImages.length > 0">
+          <div class="thumbnail-container">
+            <div 
+              v-for="(image, index) in sliderImages" 
+              :key="index"
+              class="thumbnail-item"
+              @click="currentIndex = index"
+            >
+              <img 
+                :src="image" 
+                :alt="`${book.bookName} - 缩略图${index + 1}`" 
+                class="thumbnail-image" 
+                :class="{ active: currentIndex === index }"
+                @error="(e)=>e.target.src='/images/new.png'"
+              />
+            </div>
+          </div>
         </div>
       </div>
 
@@ -49,6 +54,27 @@
           />
           <span class="score-number">{{ book.score ? book.score.toFixed(1) : '暂无评分' }}</span>
           <span class="comment-count">{{ commentList.length }} 条评价</span>
+        </div>
+
+        <!-- 领券区域 -->
+        <div class="coupon-section" v-if="book.couponTemplates && book.couponTemplates.length > 0">
+          <div class="coupon-header" @click="openCouponDialog">
+            <span class="coupon-title">领券</span>
+            <div class="coupon-list">
+              <div 
+                v-for="(coupon, index) in book.couponTemplates.slice(0, 3)" 
+                :key="coupon.id || index" 
+                class="coupon-item"
+              >
+                <span class="coupon-value">
+                  {{ coupon.type === 1 ? `满${coupon.minOrderAmount}减${coupon.discountValue}` : `${coupon.discountValue}折` }}
+                </span>
+              </div>
+              <div v-if="book.couponTemplates.length > 3" class="coupon-more" @click.stop>
+                <span>更多</span>
+              </div>
+            </div>
+          </div>
         </div>
 
         <!-- 批量购买组件 -->
@@ -123,7 +149,15 @@
     <div class="detail-tabs" v-if="book">
       <el-tabs v-model="activeTab" @tab-click="handleTabClick">
         <el-tab-pane label="商品详情" name="detail">
-          <div class="detail-content" v-html="book.detailContent || '暂无详情'"></div>
+          <!-- 动态属性 -->
+          <div class="attributes-section" v-if="attributes.length > 0">
+            <div class="attribute-item" v-for="(attr, index) in attributes" :key="index">
+              <span class="attribute-label">{{ attr.name }}：</span>
+              <span class="attribute-value">{{ attr.value }}</span>
+            </div>
+          </div>
+          <!-- 富文本详情 -->
+          <div class="detail-content" v-html="book.detailHtml || '暂无详情'"> </div>
         </el-tab-pane>
         <el-tab-pane label="商品评价" name="comment">
           <div class="comment-list" v-if="commentList.length > 0">
@@ -194,6 +228,43 @@
         <el-button type="primary" @click="submitComment">提交评价</el-button>
       </template>
     </el-dialog>
+
+    <!-- 优惠券弹窗 -->
+    <el-dialog v-model="showCouponDialog" title="领券" :width="dialogWidth" :append-to-body="true">
+      <div v-loading="checkingCoupons" class="coupon-dialog-content">
+        <div class="coupon-grid" v-if="couponJudgments.length > 0" :style="{ '--cols': couponColumns }">
+          <div 
+            v-for="(coupon, index) in couponJudgments" 
+            :key="coupon.id || index" 
+            class="coupon-card"
+          >
+            <div class="coupon-content">
+              <div class="coupon-left">
+                <span class="coupon-amount-card">{{ coupon.type === 1 ? `¥${coupon.discountValue}` : `${coupon.discountValue}折` }}</span>
+                <div class="coupon-condition">{{ coupon.type === 1 ? `满${coupon.minOrderAmount}可用` : '' }}</div>
+              </div>
+              <div class="coupon-right">
+                <div class="coupon-info">
+                  <span class="coupon-type-card">{{ coupon.type === 1 ? '满减券' : '折扣券' }}</span>
+                  <span class="coupon-scope-card">{{ getCouponScope(coupon.scope) }}</span>
+                </div>
+                <div class="coupon-validity">有效期: {{ formatCouponDate(coupon.validStartTime) }}至{{ formatCouponDate(coupon.validEndTime) }}</div>
+              </div>
+            </div>
+            <div class="coupon-footer-card">
+              <el-button 
+                :type="coupon.isLimit === 1 ? 'primary' : 'default'" 
+                :disabled="coupon.isLimit === 0"
+                @click="claimCoupon(coupon)"
+              >
+                {{ coupon.isLimit === 1 ? '立即领取' : '已领取' }}
+              </el-button>
+            </div>
+          </div>
+        </div>
+        <el-empty v-else description="暂无可用优惠券" />
+      </div>
+    </el-dialog>
   </div>
 </template>
 
@@ -229,6 +300,13 @@ const commentForm = ref({
 })
 const uploadingCommentImages = ref(false)
 
+// 优惠券弹窗状态
+const showCouponDialog = ref(false)
+const couponJudgments = ref([])
+const checkingCoupons = ref(false)
+const dialogWidth = ref('280px')
+const couponColumns = ref(1)
+
 // 计算是否有货（库存>0 视为有货）
 const hasStock = computed(() => {
   return book.value && book.value.stock > 0;
@@ -247,6 +325,53 @@ const ratingScore = computed(() => {
   }
   return 0;
 });
+
+// 解析轮播图
+const sliderImages = computed(() => {
+  if (!book.value || !book.value.sliderImages) return [];
+  try {
+    const images = JSON.parse(book.value.sliderImages);
+    return Array.isArray(images) ? images : [images];
+  } catch (e) {
+    return [book.value.sliderImages];
+  }
+});
+
+// 解析动态属性
+const attributes = computed(() => {
+  if (!book.value || !book.value.attributes) return [];
+  try {
+    const attrs = JSON.parse(book.value.attributes);
+    if (Array.isArray(attrs)) {
+      // 确保每个属性对象都有name和value属性
+      return attrs.map(attr => {
+        if (attr.key && !attr.name) {
+          return { ...attr, name: attr.key };
+        }
+        return attr;
+      });
+    }
+    return [];
+  } catch (e) {
+    return [];
+  }
+});
+
+// 当前选中的图片索引
+const currentIndex = ref(0);
+
+// 当前显示的主图
+const currentImage = computed(() => {
+  if (sliderImages.value.length > 0) {
+    return sliderImages.value[currentIndex.value] || sliderImages.value[0];
+  }
+  return book.value?.coverUrl || '/images/new.png';
+});
+
+// 处理缩略图轮播变化
+const handleThumbnailChange = (index) => {
+  currentIndex.value = index;
+};
 
 // 数量增加方法
 const increaseQuantity = () => {
@@ -306,6 +431,77 @@ const formatDate = (dateStr) => {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()} ${date.getHours()}:${date.getMinutes()}`;
 };
 
+// 格式化优惠券日期
+const formatCouponDate = (dateStr) => {
+  if (!dateStr) return '';
+  const date = new Date(dateStr);
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`;
+};
+
+// 获取优惠券使用范围
+const getCouponScope = (scope) => {
+  switch (scope) {
+    case 1:
+      return '全场通用';
+    case 2:
+      return '特价专区可用';
+    case 3:
+      return '新书专区可用';
+    default:
+      return '';
+  }
+};
+
+// 打开优惠券弹窗
+const openCouponDialog = async () => {
+  if (!book.value || !book.value.couponTemplates || book.value.couponTemplates.length === 0) {
+    return;
+  }
+  
+  checkingCoupons.value = true;
+  try {
+    // 提取优惠券ID集合
+    const couponIds = book.value.couponTemplates.map(coupon => coupon.id);
+    // 发送请求查看优惠券领取限制，使用第一个优惠券ID作为路径参数
+    const firstCouponId = couponIds[0] || 0;
+    const res = await request.post(`/user/book/limit/${firstCouponId}`, couponIds);
+    couponJudgments.value = res || [];
+    
+    // 计算弹窗宽度，根据优惠券数量自动调整（使用 CSS Grid 列数控制）
+    const couponWidth = 280; // 每个优惠券的宽度
+    const gap = 20; // 优惠券之间的间距
+    const cols = Math.min(Math.max(couponJudgments.value.length, 1), 2); // 最多 2 列，至少 1 列
+    couponColumns.value = cols;
+    const dialogPadding = 32; // 弹窗左右内边距
+    const extraSpacing = 24; // 比刚好包裹内容略多出的宽度，避免显得太贴边
+    dialogWidth.value = `${couponWidth * cols + gap * (cols - 1) + dialogPadding + extraSpacing}px`;
+    
+    showCouponDialog.value = true;
+  } catch (error) {
+    console.error('获取优惠券领取限制失败:', error);
+    ElMessage.error('获取优惠券信息失败');
+  } finally {
+    checkingCoupons.value = false;
+  }
+};
+
+// 领取优惠券
+const claimCoupon = async (coupon) => {
+  try {
+    // 调用后端领取优惠券接口
+    await request.post(`/user/book/coupon/${coupon.id}`);
+    ElMessage.success('优惠券领取成功');
+    // 更新优惠券状态
+    const index = couponJudgments.value.findIndex(item => item.id === coupon.id);
+    if (index !== -1) {
+      couponJudgments.value[index].isLimit = 0;
+    }
+  } catch (error) {
+    console.error('领取优惠券失败:', error);
+    ElMessage.error('领取优惠券失败');
+  }
+};
+
 // 解析评价图片：兼容后端返回的数组、JSON 字符串或单个 URL
 const parseImages = (images) => {
   if (!images) return [];
@@ -332,16 +528,19 @@ const buyNow = async () => {
   }
   try {
     const id = book.value.id;
-    // 后端当前期望通过请求体接收（@RequestBody UserBuyNow），因此使用 POST 到 /user/book/buy
-    const res = await request.post('/user/book/buy', { productId: id, quantity: quantity.value });
+    // 后端已修改为GET请求，使用query参数传递
+    const params = { productId: id, quantity: quantity.value, source: 'buynow' };
+    const res = await request.get('/user/book/buy', { params });
     const vo = res || {};
+    const buy = vo.buy || {};
     const item = {
-      id: vo.productId || id,
-      title: vo.bookName || book.value.bookName || book.value.title,
-      price: Number(vo.price || vo.totalPrice || book.value.price) || 0,
-      quantity: vo.quantity || quantity.value,
-      cover: vo.coverUrl || book.value.coverUrl || book.value.cover || '/images/new.png',
-      description: vo.description || book.value.description || ''
+      id: buy.productId || id,
+      productId: buy.productId || id,
+      title: buy.bookName || book.value.bookName || book.value.title,
+      price: Number(buy.price || vo.totalPrice || book.value.price) || 0,
+      quantity: buy.quantity || quantity.value,
+      cover: buy.coverUrl || book.value.coverUrl || book.value.cover || '/images/new.png',
+      description: buy.description || book.value.description || ''
     };
     // 保存为支持的结构：{ buyNows: [...], activityDiscount, originalTotal }
     const checkoutPayload = {
@@ -367,7 +566,7 @@ const buyNow = async () => {
     } catch (e) {
       console.warn('预加载运费模板失败', e);
     }
-    router.push({ name: 'CreateOrder', query: { source: 'buyNow' } });
+    router.push({ name: 'CreateOrder', query: { bookId: id, quantity: quantity.value, source: 'buynow' } });
   } catch (e) {
     console.error('立即购买接口调用失败', e);
     ElMessage.error('无法获取商品信息，请稍后重试');
@@ -513,15 +712,15 @@ const submitComment = async () => {
 
 /* 左侧媒体区 */
 .media-section {
-  flex: 0 0 240px;
+  flex: 0 0 320px;
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-.media-player-wrapper {
-  width: 200px;
-  height: 200px;
+.main-image-wrapper {
+  width: 320px;
+  height: 320px;
   background: #f5f7fa;
   border-radius: 8px;
   overflow: hidden;
@@ -529,21 +728,253 @@ const submitComment = async () => {
   position: relative;
 }
 
-.book-video, .book-cover-large {
+.main-image {
   width: 100%;
   height: 100%;
-  object-fit: contain;
+  object-fit: cover;
   display: block;
   background: #fff;
 }
 
-.play-hint {
+.thumbnail-carousel {
+  width: 320px;
   margin-top: 15px;
-  color: #909399;
-  font-size: 13px;
+  overflow: hidden;
+}
+
+.thumbnail-container {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #ccc #f5f5f5;
+}
+
+.thumbnail-container::-webkit-scrollbar {
+  height: 6px;
+}
+
+.thumbnail-container::-webkit-scrollbar-track {
+  background: #f5f5f5;
+  border-radius: 3px;
+}
+
+.thumbnail-container::-webkit-scrollbar-thumb {
+  background: #ccc;
+  border-radius: 3px;
+}
+
+.thumbnail-container::-webkit-scrollbar-thumb:hover {
+  background: #999;
+}
+
+.thumbnail-item {
+  flex-shrink: 0;
+  width: 54px;
+  height: 54px;
+}
+
+.thumbnail-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+  border: 2px solid transparent;
+}
+
+.thumbnail-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.thumbnail-image.active {
+  border-color: #ff5000;
+  box-shadow: 0 2px 8px rgba(255, 80, 0, 0.3);
+}
+
+/* 领券区域 */
+.coupon-section {
+  margin-top: 20px;
+  margin-bottom: 20px;
+  width: 100%;
+}
+
+.coupon-header {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px;
+  border-radius: 8px;
+  transition: background 0.2s;
+}
+
+.coupon-header:hover {
+  background: #f5f5f5;
+}
+
+.coupon-title {
+  font-size: 14px;
+  color: #333;
+  font-weight: 500;
+  margin-right: 15px;
+  white-space: nowrap;
+}
+
+.coupon-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  flex: 1;
+}
+
+.coupon-item {
+  background: url('/Coupon/C3.jpg') no-repeat center center;
+  background-size: cover;
+  border: none;
+  border-radius: 16px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #fff;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.coupon-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+}
+
+.coupon-more {
+  background: #f5f5f5;
+  border: 1px solid #e0e0e0;
+  border-radius: 16px;
+  padding: 8px 16px;
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.coupon-more:hover {
+  background: #e0e0e0;
+}
+
+/* 优惠券弹窗 */
+.coupon-dialog-content {
+  padding: 20px 0;
+}
+
+.coupon-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--cols), 280px);
+  justify-content: start;
+  gap: 20px;
+}
+
+.coupon-card {
+  background: url('/Coupon/C2.jpg') no-repeat center center;
+  background-size: cover;
+  border: none;
+  border-radius: 8px;
+  width: 280px;
+  height: 94px;
+  padding: 12px;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.coupon-content {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex: 1;
+}
+
+.coupon-left {
+  flex: 1;
+}
+
+.coupon-amount-card {
+  font-size: 20px;
+  font-weight: bold;
+  color: #ff5000;
+  margin-bottom: 4px;
+}
+
+.coupon-condition {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+
+.coupon-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.coupon-info {
   display: flex;
   align-items: center;
   gap: 6px;
+  margin-bottom: 4px;
+}
+
+.coupon-type-card {
+  font-size: 10px;
+  color: #fff;
+  background: #ff5000;
+  padding: 1px 6px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.coupon-scope-card {
+  font-size: 10px;
+  color: #666;
+  background: #f5f5f5;
+  padding: 1px 6px;
+  border-radius: 8px;
+  display: inline-block;
+}
+
+.coupon-validity {
+  font-size: 10px;
+  color: #999;
+}
+
+.coupon-footer-card {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.coupon-footer-card .el-button {
+  width: 180px;
+  height: 28px;
+  border-radius: 14px;
+  background: #409eff;
+  border: none;
+  color: #fff;
+  font-size: 12px;
+  padding: 0;
+}
+
+.coupon-footer-card .el-button:hover {
+  background: #66b1ff;
+}
+
+.coupon-footer-card .el-button:disabled {
+  background: #c0c4cc;
+  color: #fff;
 }
 
 /* 右侧信息区 */
@@ -712,12 +1143,46 @@ const submitComment = async () => {
   padding: 20px;
 }
 
+.attributes-section {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+.attribute-item {
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.attribute-label {
+  font-weight: 500;
+  color: #606266;
+  margin-right: 8px;
+  min-width: 100px;
+}
+
+.attribute-value {
+  color: #303133;
+  flex: 1;
+}
+
 .detail-content {
   line-height: 1.8;
   color: #606266;
   font-size: 15px;
   text-align: justify;
   padding: 20px;
+}
+
+.detail-content img {
+  max-width: 100%;
+  height: auto;
+  margin: 10px 0;
 }
 
 .comment-list {

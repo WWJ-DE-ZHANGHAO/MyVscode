@@ -8,7 +8,7 @@ export const categoryMap = ref({})
 export const loadCategories = async () => {
   try {
     // 检查是否已登录
-    const token = sessionStorage.getItem('authToken')
+    const token = sessionStorage.getItem('token')
     if (!token) {
       // 未登录时使用模拟数据
       const mockCategories = [

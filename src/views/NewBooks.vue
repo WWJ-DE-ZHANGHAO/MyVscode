@@ -17,7 +17,7 @@
       />
     </div>
 
-    <!-- 2. 动态分类书籍展示区 -->
+    <!-- 2. 主内容区 -->
     <div v-if="newBooks.length === 0" class="empty-new-books">
       <div class="empty-content">
         <el-icon size="60"><Sugar /></el-icon>
@@ -27,31 +27,43 @@
       </div>
     </div>
     
-    <div v-else class="category-sections">
-      <div 
-        v-for="category in dynamicCategories" 
-        :key="category.name" 
-        class="category-block"
-      >
-        <div class="category-header-bar">
-          <h2 class="category-title">
-            <span class="title-icon">{{ getCategoryIcon(category.name) }}</span>
-            {{ category.name }}
-          </h2>
+    <div v-else class="main-content">
+      <!-- 左侧：分类展示区 -->
+      <div class="content-left">
+        <div 
+          v-for="category in dynamicCategories" 
+          :key="category.name" 
+          class="category-block"
+          :id="`category-${category.name.replace(/\s+/g, '-').toLowerCase()}`"
+        >
+          <div class="category-header-bar">
+            <h2 class="category-title">
+              <span class="title-icon">{{ getCategoryIcon(category.name) }}</span>
+              {{ category.name }}
+            </h2>
+          </div>
+          
+          <div class="book-grid">
+            <BookCard 
+              v-for="book in category.books" 
+              :key="book.id" 
+              :book="book" 
+              @add-to-cart="$emit('add-to-cart', book)"
+            />
+          </div>
+          
+          <div v-if="category.books.length === 0" class="empty-category">
+            暂无该类新书，敬请期待！
+          </div>
         </div>
-        
-        <div class="book-grid">
-          <BookCard 
-            v-for="book in category.books" 
-            :key="book.id" 
-            :book="book" 
-            @add-to-cart="$emit('add-to-cart', book)"
-          />
-        </div>
-        
-        <div v-if="category.books.length === 0" class="empty-category">
-          暂无该类新书，敬请期待！
-        </div>
+      </div>
+      
+      <!-- 右侧：分类导航 -->
+      <div class="content-right">
+        <CategoryNavigation 
+          title="分类导航"
+          :categories="dynamicCategories"
+        />
       </div>
     </div>
   </div>
@@ -60,6 +72,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue';
 import BookCard from '@/components/BookCard.vue';
+import CategoryNavigation from '@/components/CategoryNavigation.vue';
 import request from '@/utils/request';
 //import mockData from '@/mock/bookData'; 
 import { getCategoryName, categories, loadCategories } from '@/composables/useCategories';
@@ -174,11 +187,27 @@ onMounted(async () => {
 .banner-placeholder h1 { font-size: 48px; margin: 0 0 15px 0; letter-spacing: 4px; font-weight: 800; }
 .banner-placeholder p { font-size: 18px; opacity: 0.9; }
 
-/* --- 分类区块 --- */
-.category-sections {
+/* --- 主内容区 --- */
+.main-content {
   max-width: 1400px;
   margin: 0 auto;
   padding: 0 20px;
+  display: flex;
+  gap: 30px;
+}
+
+.content-left {
+  flex: 1;
+}
+
+.content-right {
+  width: 280px;
+  flex-shrink: 0;
+}
+
+/* --- 分类区块 --- */
+.category-sections {
+  width: 100%;
 }
 
 .category-block {

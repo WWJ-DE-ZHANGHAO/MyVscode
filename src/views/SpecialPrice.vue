@@ -17,39 +17,51 @@
       />
     </div>
 
-    <!-- 2. 特价书分类展示区 -->
-    <div class="category-sections">
-      <div class="special-error" v-if="loadError">
-        <div class="err-msg">加载特价商品失败：{{ loadErrorMsg }}</div>
-        <el-button size="small" type="primary" @click="loadSpecial">重试</el-button>
+    <!-- 2. 主内容区 -->
+    <div class="main-content">
+      <!-- 左侧：分类展示区 -->
+      <div class="content-left">
+        <div class="special-error" v-if="loadError">
+          <div class="err-msg">加载特价商品失败：{{ loadErrorMsg }}</div>
+          <el-button size="small" type="primary" @click="loadSpecial">重试</el-button>
+        </div>
+        <div 
+          v-for="(category, index) in specialCategories" 
+          :key="category.id" 
+          class="category-block"
+          :id="`category-${category.id || category.name.replace(/\s+/g, '-').toLowerCase()}`"
+        >
+          <!-- 【修改点 1】标题样式改为居中大色块 -->
+          <div class="category-header-bar">
+            <h2 class="category-title">
+              <span class="title-icon">{{ category.icon }}</span>
+              {{ category.name }}
+            </h2>
+            <!-- 可选：如果您想加"更多"按钮，可以取消下面注释 -->
+            <!-- <a href="#" class="more-link">更多 >></a> -->
+          </div>
+          
+          <div class="book-grid">
+            <BookCard 
+              v-for="book in category.books" 
+              :key="book.id" 
+              :book="book" 
+              @add-to-cart="$emit('add-to-cart', book)"
+            />
+          </div>
+          
+          <div v-if="category.books.length === 0" class="empty-category">
+            暂无该类特价书籍，敬请期待！
+          </div>
+        </div>
       </div>
-      <div 
-        v-for="(category, index) in specialCategories" 
-        :key="category.id" 
-        class="category-block"
-      >
-        <!-- 【修改点 1】标题样式改为居中大色块 -->
-        <div class="category-header-bar">
-          <h2 class="category-title">
-            <span class="title-icon">{{ category.icon }}</span>
-            {{ category.name }}
-          </h2>
-          <!-- 可选：如果您想加“更多”按钮，可以取消下面注释 -->
-          <!-- <a href="#" class="more-link">更多 >></a> -->
-        </div>
-        
-        <div class="book-grid">
-          <BookCard 
-            v-for="book in category.books" 
-            :key="book.id" 
-            :book="book" 
-            @add-to-cart="$emit('add-to-cart', book)"
-          />
-        </div>
-        
-        <div v-if="category.books.length === 0" class="empty-category">
-          暂无该类特价书籍，敬请期待！
-        </div>
+      
+      <!-- 右侧：分类导航 -->
+      <div class="content-right">
+        <CategoryNavigation 
+          title="分类导航"
+          :categories="specialCategories"
+        />
       </div>
     </div>
   </div>
@@ -59,6 +71,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { ElMessage } from 'element-plus';
 import BookCard from '@/components/BookCard.vue';
+import CategoryNavigation from '@/components/CategoryNavigation.vue';
 import request from '@/utils/request';
 import { getCategoryName, categories, loadCategories } from '@/composables/useCategories'
 
@@ -68,6 +81,16 @@ const bannerLoaded = ref(true);
 
 // 原始特价商品列表
 const specialList = ref([]);
+
+// 分类图标映射
+const getCategoryIcon = (categoryName) => {
+  const iconMap = {
+    '少儿': '🧸', '科幻': '🚀', '推理': '🕵️', '文学': '📚',
+    '历史': '📜', '经管': '💼', '励志': '💪', '青春': '🌸',
+    '动漫': '🎨', '中小学用书': '🎒', '社科': '🌍', '其他': '📦'
+  };
+  return iconMap[categoryName] || '📦';
+};
 
 // 根据 categoryId 分组
 const specialCategories = computed(() => {
@@ -82,7 +105,8 @@ const specialCategories = computed(() => {
     const nameFromMap = getCategoryName(cid)
     const fallbackFromList = (categories.value || []).find(c => String(c.id) === String(cid))
     const name = nameFromMap || (fallbackFromList && fallbackFromList.name) || `分类 ${cid}`
-    return { id: cid, name, books: items.map(normalizeBook) }
+    const icon = getCategoryIcon(name);
+    return { id: cid, name, icon, books: items.map(normalizeBook) }
   });
 });
 
@@ -177,11 +201,27 @@ onMounted(async () => {
 .banner-placeholder h1 { font-size: 42px; margin: 0 0 15px 0; letter-spacing: 2px; }
 .banner-placeholder p { font-size: 18px; opacity: 0.9; }
 
-/* --- 分类区块 --- */
-.category-sections {
-  max-width: 1200px; /* 与 Banner 宽度一致 */
+/* --- 主内容区 --- */
+.main-content {
+  max-width: 1400px; /* 与 Banner 宽度一致 */
   margin: 0 auto;
   padding: 0 20px;
+  display: flex;
+  gap: 30px;
+}
+
+.content-left {
+  flex: 1;
+}
+
+.content-right {
+  width: 280px;
+  flex-shrink: 0;
+}
+
+/* --- 分类区块 --- */
+.category-sections {
+  width: 100%;
 }
 
 .category-block {

@@ -135,7 +135,7 @@ const doPasswordLogin = async () => {
       password: password.value 
     });
     if (userData && userData.token) {
-      sessionStorage.setItem('authToken', userData.token);
+      sessionStorage.setItem('token', userData.token);
       const userToSave = { username: userData.username, avatar: userData.avatar };
       saveCurrentUser(userToSave);
       window.dispatchEvent(new Event('user-updated'));
@@ -167,7 +167,7 @@ const doSmsLogin = async () => {
   try {
     const userData = await request.post('/user/user/login', { phone: phone.value, code: code.value });
     if (userData && userData.token) {
-      sessionStorage.setItem('authToken', userData.token);
+      sessionStorage.setItem('token', userData.token);
       const userToSave = { username: userData.username, avatar: userData.avatar };
       saveCurrentUser(userToSave);
       window.dispatchEvent(new Event('user-updated'));

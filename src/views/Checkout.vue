@@ -62,34 +62,13 @@
       <AddressDialog v-model="showAddressModal" :address="editingAddress" @saved="onDialogSaved" />
     </div>
 
-    <!-- 2. 中间内容：配送方式 + 商品清单 -->
+    <!-- 2. 中间内容：商品清单 + 金额信息 -->
     <div class="section order-content">
+      <!-- 左侧：商品信息 -->
       <div class="content-left">
-        <!-- 左侧：配送方式 (修改版) -->
-        <div class="delivery-box">
-          <!-- 修改点：保留“配送时间”文字标签，但内部替换为快递公司选择 -->
-          <div class="delivery-time">
-            <span class="label">运输方式</span>
-              <!-- 修改点：这里改为运费模板下拉框 -->
-              <el-select v-model="selectedShippingTemplateId" placeholder="请选择运费方式" size="small" style="width: 280px;" @change="(val) => calcShippingCost(val, selectedAddress && selectedAddress.id)">
-                <el-option v-for="tpl in shippingTemplates" :key="tpl.id" :label="tpl.name" :value="tpl.id" />
-              </el-select>
-          </div>
-          
-          <!-- 修改点：调整了下方的文字提示，去掉了“快递说明”链接 -->
-          <div class="delivery-tip">
-            <span class="date-highlight">{{ currentDate }}</span> 前付款，预计 
-            <span class="date-highlight">{{ estimateDate }}</span>（周日） 送达
-          </div>
-          <div style="margin-top:8px;font-size:13px;color:#666">已选运费: <span style="color:#ff5000">¥{{ freight.toFixed(2) }}</span></div>
-        </div>
-      </div>
-
-      <div class="content-right">
-        <!-- 右侧：商品清单与汇总 (保持不变) -->
         <div class="order-summary-header">
           <span>以下商品 预计{{ estimateDate }}送达</span>
-          <span class="freight">运费:0.00</span>
+          <span class="freight">运费:{{ freight.toFixed(2) }}</span>
         </div>
         <div class="product-table">
           <div class="table-header">
@@ -118,41 +97,79 @@
           <div class="left-info">
             <span class="package-count">1个包裹</span>
           </div>
-          <div class="right-info">
-              <span class="label">商品金额: <span class="amount">{{ displayedOriginalTotal.toFixed(2) }}</span></span>
-              <span v-if="displayedDiscount > 0" class="label">优惠: <span class="amount">-{{ displayedDiscount.toFixed(2) }}</span></span>
-              <span class="label">运费: <span class="amount">{{ freight.toFixed(2) }}</span></span>
-              <span class="total-pay">店铺合计: <span class="price-highlight">¥{{ finalPayAmount.toFixed(2) }}</span></span>
+        </div>
+      </div>
+
+      <!-- 右侧：金额信息 -->
+      <div class="content-right">
+        <div class="payment-details">
+          <h3>付款详情</h3>
+          <div class="detail-item">
+            <span>商品总价</span>
+            <span class="price">¥{{ displayedOriginalTotal.toFixed(2) }}</span>
+          </div>
+          <div class="detail-item">
+            <span>运费</span>
+            <span class="price">¥{{ freight.toFixed(2) }}</span>
+          </div>
+          <div class="detail-item">
+            <span>活动优惠</span>
+            <span class="price negative">-¥{{ displayedDiscount.toFixed(2) }}</span>
+          </div>
+          <div class="detail-item coupon-detail">
+            <span>礼券优惠</span>
+            <div class="coupon-section" @click="toggleCouponDropdown">
+              <span class="coupon-value">-¥{{ selectedCouponValue.toFixed(2) }}</span>
+              <i :class="['el-icon-arrow-down', 'coupon-arrow', { 'rotated': showCouponDropdown }]"></i>
             </div>
+          </div>
+          <div class="detail-item points-item" @click="usePoints = !usePoints" :class="{ 'points-disabled': pointsAvailable < 100 }">
+            <div class="points-section">
+              <span>积分抵扣</span>
+              <span class="points-value" v-if="usePoints">使用积分抵扣 ¥{{ pointsValue.toFixed(2) }}</span>
+              <span class="points-value" v-else>未使用积分</span>
+            </div>
+            <div class="points-switch">
+              <div class="switch-track" :class="{ 'switch-active': usePoints && pointsAvailable >= 100 }">
+                <div class="switch-thumb"></div>
+              </div>
+            </div>
+          </div>
+          <!-- 优惠券下拉框（后端未实现） -->
+          <div class="coupon-dropdown" v-if="showCouponDropdown">
+            <div class="coupon-list">
+              <div v-if="coupons.length === 0" class="coupon-empty">
+                优惠券为空
+              </div>
+              <div v-else class="coupon-item" v-for="(coupon, index) in coupons" :key="index" :class="{ 'coupon-disabled': !coupon.available }">
+                  <div class="coupon-select">
+                    <el-radio v-model="selectedCoupon" :label="coupon.value" :disabled="!coupon.available"></el-radio>
+                  </div>
+                  <div class="coupon-content">
+                    <div class="coupon-header">
+                      <span class="coupon-amount">{{ coupon.value }}</span>
+                      <span class="coupon-type">{{ coupon.type }}</span>
+                    </div>
+                    <div class="coupon-desc">{{ coupon.desc }}</div>
+                    <div class="coupon-expiry">有效期: {{ coupon.expiry }}</div>
+                  </div>
+                </div>
+            </div>
+          </div>
+          <div class="detail-item total-discount">
+            <span>合计优惠</span>
+            <span class="price negative">-¥{{ (displayedDiscount + selectedCouponValue).toFixed(2) }}</span>
+          </div>
+          <div class="detail-item total-amount">
+            <span>合计</span>
+            <span class="price">¥{{ finalPayAmount.toFixed(2) }}</span>
+          </div>
+          <el-button type="danger" class="btn-submit" @click="handlePay">提交订单</el-button>
         </div>
       </div>
     </div>
 
-    <!-- 3. 底部悬浮结算栏 (保持不变) -->
-    <div class="bottom-bar">
-      <div class="bar-left">
-        <div class="send-to">
-          <span class="label">寄送至:</span>
-          <span class="value" v-if="selectedAddress"> 
-            {{ selectedAddress.fullLocation }} {{ selectedAddress.detailAddress }} 
-          </span>
-        </div>
-        <div class="contact-info" v-if="selectedAddress">
-          {{ selectedAddress.consignee }} {{ formatPhone(selectedAddress.phone) }}
-        </div>
-      </div>
-      <div class="bar-right">
-          <div class="total-info">
-          <span class="count">共{{ totalQuantity }}件商品</span>
-          <span class="pay-amount">实付: <span class="symbol">¥</span><span class="number">{{ finalPayAmount.toFixed(2) }}</span></span>
-          <span class="freight-tiny">(含运费{{ freight.toFixed(2) }}元)</span>
-        </div>
-        <div class="action-area">
-          <div class="countdown">热销品订单请在 <span>2小时</span> 内完成支付</div>
-          <el-button type="danger" class="btn-pay" @click="handlePay">去支付</el-button>
-        </div>
-      </div>
-    </div>
+
   </div>
 </template>
 
@@ -174,8 +191,6 @@ const cartItems = ref([
 
 // --- 状态与逻辑 ---
 const selectedAddress = ref(null);
-const selectedShippingTemplateId = ref(null);
-const shippingTemplates = ref([]);
 const freight = ref(0); // 运费金额
 const activityDiscount = ref(null); // 优惠金额（后端可能返回 null）
 const originalTotal = ref(null); // 后端返回的商品总价（可能用于展示）
@@ -184,11 +199,124 @@ const activeCardId = ref(null);
 const expanded = ref(false);
 const showAddressModal = ref(false);
 const editingAddress = ref(null);
+const showCouponDropdown = ref(false);
+const selectedCoupon = ref(null);
+const selectedCouponValue = ref(0); // 选中的优惠券折扣金额
+const selectedCouponRecordId = ref(null); // 选中的优惠券记录ID
+const usePoints = ref(false);
+const pointsAvailable = ref(1000); // 假设用户有1000积分
+const pointsValue = ref(10); // 假设1000积分可以抵扣10元
+const usedPoints = ref(0); // 实际使用的积分
+const shippingFee = ref(0); // 运费
+const coupons = ref([]);
 const visibleAddresses = computed(() => (expanded.value ? addressList.value : addressList.value.slice(0, 4)));
+
+const toggleCouponDropdown = async () => {
+  showCouponDropdown.value = !showCouponDropdown.value;
+  if (showCouponDropdown.value) {
+    await fetchCoupons();
+  }
+};
+
+// 获取未使用的优惠券
+const fetchCoupons = async () => {
+  try {
+    // 准备请求参数
+    const params = cartItems.value.map(item => ({
+      productId: item.id,
+      totalprice: item.price * item.quantity
+    }));
+    
+    // 发送请求
+    const res = await request.post('/user/user-coupon-record/get', params);
+    
+    // 处理响应数据
+    if (Array.isArray(res)) {
+      coupons.value = res.map(coupon => ({
+        id: coupon.id,
+        value: coupon.type === 1 ? `¥${coupon.discountValue.toFixed(2)}` : `${coupon.discountValue}折`,
+        type: coupon.type === 1 ? '满减券' : '折扣券',
+        desc: `满${coupon.minOrderAmount.toFixed(2)}元可用`,
+        expiry: `${formatDate(coupon.validStartTime)}至${formatDate(coupon.validEndTime)}`,
+        available: coupon.status === 1,
+        couponRecordId: coupon.couponRecordId
+      }));
+    } else {
+      // 当响应数据为null或非数组时，设置为空数组
+      coupons.value = [];
+    }
+  } catch (e) {
+    console.error('获取优惠券失败', e);
+    ElMessage.error('获取优惠券失败，请稍后重试');
+  }
+};
+
+// 格式化日期
+const formatDate = (date) => {
+  if (!date) return '';
+  const d = new Date(date);
+  return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+};
+
+// 监听选中的优惠券变化
+import { watch } from 'vue';
+
+watch(selectedCoupon, (newValue) => {
+  if (newValue) {
+    // 找到对应的优惠券对象，获取couponRecordId
+    const selectedCouponObj = coupons.value.find(coupon => coupon.value === newValue);
+    if (selectedCouponObj) {
+      selectedCouponRecordId.value = selectedCouponObj.couponRecordId;
+    }
+    // 提取折扣金额
+    if (newValue.startsWith('¥')) {
+      selectedCouponValue.value = parseFloat(newValue.replace('¥', '')) || 0;
+    } else if (newValue.endsWith('折')) {
+      // 折扣券计算折扣金额
+      const discountRate = parseFloat(newValue.replace('折', '')) / 10;
+      selectedCouponValue.value = displayedOriginalTotal.value * (1 - discountRate);
+    }
+  } else {
+    selectedCouponValue.value = 0;
+    selectedCouponRecordId.value = null;
+  }
+});
 
 const toggleExpand = () => { expanded.value = !expanded.value; };
 
 const switchRegion = () => { ElMessage.info('切换配送地区（占位）'); };
+
+// 使用积分抵扣
+const usePointsDeduction = async () => {
+  if (!usePoints.value) {
+    pointsValue.value = 0;
+    usedPoints.value = 0;
+    return;
+  }
+  try {
+    const res = await request.post('/user/pointsLog/use');
+    if (res) {
+      pointsValue.value = Number(res.amount) || 0;
+      usedPoints.value = Number(res.points) || 0;
+    }
+  } catch (e) {
+    console.error('获取积分抵扣失败', e);
+    ElMessage.error('获取积分抵扣失败，请稍后重试');
+    usePoints.value = false;
+    pointsValue.value = 0;
+    usedPoints.value = 0;
+  }
+};
+
+// 监听积分抵扣开关变化
+watch(usePoints, async (newValue) => {
+  if (newValue) {
+    await usePointsDeduction();
+  } else {
+    pointsValue.value = 0;
+    usedPoints.value = 0;
+  }
+});
 
 const editAddress = (addr) => {
   editingAddress.value = addr;
@@ -226,31 +354,17 @@ const loadAddressList = async () => {
   }
 };
 
-// 加载运费模板列表
-const loadShippingTemplates = async () => {
-  try {
-    const res = await request.get('/user/shipping-template/list');
-    if (Array.isArray(res)) {
-      // 保证每项至少有 id/name
-      shippingTemplates.value = res.map(t => ({ id: t.id, name: t.name || t.templateName || t.title || (`模板-${t.id}`), raw: t }));
-    } else {
-      shippingTemplates.value = [];
-    }
-  } catch (e) {
-    console.error('加载运费模板失败', e);
-    shippingTemplates.value = [];
-  }
-};
 
-// 计算运费：发送 shippingTemplateId + addressBookId，后端返回金额
-const calcShippingCost = async (shippingTemplateId, addressBookId) => {
-  if (!shippingTemplateId || !addressBookId) {
+
+// 计算运费：发送 addressBookId，后端返回金额
+const calcShippingCost = async (addressBookId) => {
+  if (!addressBookId) {
     freight.value = 0;
     return;
   }
   try {
     // 后端映射为 GET /cost，使用 query 参数
-    const params = { shippingTemplateId: Number(shippingTemplateId), addressBookId: Number(addressBookId) };
+    const params = { addressBookId: Number(addressBookId) };
     console.log('calcShippingCost -> request params:', params);
     const res = await request.get('/user/shipping-template/cost', { params });
     console.log('calcShippingCost -> response:', res);
@@ -342,15 +456,15 @@ const displayedDiscount = computed(() => {
 });
 
 const finalPayAmount = computed(() => {
-  const v = Number(displayedOriginalTotal.value) - Number(displayedDiscount.value) + Number(freight.value || 0);
+  const v = Number(displayedOriginalTotal.value) - Number(displayedDiscount.value) - Number(selectedCouponValue.value) + Number(freight.value || 0) - (usePoints.value ? Number(pointsValue.value) : 0);
   return v;
 });
 
 const selectAddress = async (addr) => {
   selectedAddress.value = addr;
-  // 重新计算运费（若已选择运费模板）
-  if (selectedShippingTemplateId.value && selectedAddress.value && selectedAddress.value.id) {
-    await calcShippingCost(selectedShippingTemplateId.value, selectedAddress.value.id);
+  // 重新计算运费
+  if (selectedAddress.value && selectedAddress.value.id) {
+    await calcShippingCost(selectedAddress.value.id);
   }
 };
 
@@ -366,7 +480,9 @@ const handlePay = async () => {
     return;
   }
   try {
-    const source = route.query.source || 'detail';
+    // 获取source参数，优先使用URL中的source参数，统一处理大小写
+    const rawSource = route.query.source || 'buynow';
+    const source = rawSource.toLowerCase() === 'buynow' ? 'buyNow' : rawSource;
     // 使用本地时间格式 "YYYY-MM-DD HH:mm:ss"（空格分隔），预计送达取三天后的整点（向上取整到下一个整点）
     const makeLocalDateTime = (d) => {
       const Y = d.getFullYear();
@@ -387,55 +503,77 @@ const handlePay = async () => {
     const estimated = getEstimatedDeliveryDateTime();
     const amountNum = Number((finalPayAmount.value).toFixed(2));
 
-    // 购物车下单时，Cart 页面应已把选中的购物车 id 列表存在 sessionStorage
-    let shoppingCartIds = null;
-    try {
-      const raw = sessionStorage.getItem('checkoutShoppingCartIds');
-      if (raw) shoppingCartIds = JSON.parse(raw);
-    } catch (e) {
-      shoppingCartIds = null;
-    }
-
-    // 只包含存在值的字段，避免向后端发送 explicit null/undefined 导致校验失败
-    const payload = { source };
-    // addressBookId 在后端为 Long 类型，确保以数字形式发送
-    payload.addressBookId = Number(selectedAddress.value.id);
-    payload.estimatedDeliveryTime = estimated;
-    if (selectedShippingTemplateId.value) payload.shippingTemplateId = Number(selectedShippingTemplateId.value);
-    payload.consigneeName = selectedAddress.value.consignee || selectedAddress.value.receiverName || '';
-    payload.phone = selectedAddress.value.phone || '';
-    // 后端新接口要求：actualPay(实付)、originalTotal(原价)、activityDiscount(优惠)
-    payload.actualPay = amountNum;
-    if (originalTotal.value != null) payload.originalTotal = Number(originalTotal.value);
-    if (activityDiscount.value != null) payload.activityDiscount = Number(activityDiscount.value);
-    // 包含运费字段（后端实体已准备好接收 freight）
-    if (freight.value != null) payload.freight = Number(freight.value);
+    // 构建符合UserOrderSubmit实体类的payload
+    const payload = {
+      source,
+      couponRecordId: selectedCouponRecordId.value ? Number(selectedCouponRecordId.value) : null,
+      usedPoints: usePoints.value && usedPoints.value > 0 ? usedPoints.value : null,
+      addressBookId: Number(selectedAddress.value.id),
+      estimatedDeliveryTime: estimated,
+      consigneeName: selectedAddress.value.consignee || selectedAddress.value.receiverName || '',
+      phone: selectedAddress.value.phone || '',
+      actualPay: amountNum,
+      originalTotal: originalTotal.value != null ? Number(originalTotal.value) : null,
+      freight: freight.value != null ? Number(freight.value) : null,
+      activityDiscount: activityDiscount.value != null ? Number(activityDiscount.value) : null,
+      productId: null,
+      quantity: null,
+      shoppingCartIds: null
+    };
+    
     if (source === 'buyNow') {
-      // 优先从预加载的 checkoutItems（UserBuyNowVo 列表）获取 productId/quantity
-      let buyNowItems = null;
-      try {
-        const raw = sessionStorage.getItem('checkoutItems');
-        if (raw) buyNowItems = JSON.parse(raw);
-      } catch (e) { buyNowItems = null; }
-
-      if (Array.isArray(buyNowItems) && buyNowItems.length > 0) {
-        const it = buyNowItems[0];
-        payload.productId = Number(it.productId || it.id || it.productId);
-        payload.quantity = Number(it.quantity || it.number || 1);
+      // 商品详情页下单：需要传递productId和quantity
+      if (Array.isArray(cartItems.value) && cartItems.value.length > 0) {
+        const it = cartItems.value[0];
+        payload.productId = Number(it.productId || it.id); // 优先使用productId字段
+        payload.quantity = Number(it.quantity || 1);
       } else if (route.query.bookId) {
         payload.productId = Number(route.query.bookId);
-        if (route.query.quantity) payload.quantity = Number(route.query.quantity);
-      } else if (Array.isArray(cartItems.value) && cartItems.value.length > 0) {
-        const it = cartItems.value[0];
-        payload.productId = Number(it.id || it.productId);
-        payload.quantity = Number(it.quantity || it.number || 1);
+        payload.quantity = route.query.quantity ? Number(route.query.quantity) : 1;
       } else {
-        ElMessage.error('缺少商品信息，无法提交订单');
+        // 尝试从sessionStorage中获取checkoutItems作为最后备用
+        let checkoutItems = null;
+        try {
+          const raw = sessionStorage.getItem('checkoutItems');
+          if (raw) checkoutItems = JSON.parse(raw);
+        } catch (e) { checkoutItems = null; }
+
+        if (checkoutItems && checkoutItems.buyNows && Array.isArray(checkoutItems.buyNows) && checkoutItems.buyNows.length > 0) {
+          const it = checkoutItems.buyNows[0];
+          payload.productId = Number(it.productId || it.id);
+          payload.quantity = Number(it.quantity || it.number || 1);
+        } else if (Array.isArray(checkoutItems) && checkoutItems.length > 0) {
+          const it = checkoutItems[0];
+          payload.productId = Number(it.productId || it.id);
+          payload.quantity = Number(it.quantity || it.number || 1);
+        } else {
+          ElMessage.error('缺少商品信息，无法提交订单');
+          return;
+        }
+      }
+      // 确保购物车ID列表为null
+      payload.shoppingCartIds = null;
+    } else {
+      // 购物车下单：需要传递shoppingCartIds，不需要传递productId和quantity
+      // 只有在非buyNow模式下才从sessionStorage读取购物车ID
+      let shoppingCartIds = null;
+      try {
+        const raw = sessionStorage.getItem('checkoutShoppingCartIds');
+        if (raw) shoppingCartIds = JSON.parse(raw);
+      } catch (e) {
+        shoppingCartIds = null;
+      }
+      
+      if (Array.isArray(shoppingCartIds) && shoppingCartIds.length > 0) {
+        // 购物车下单：传递购物车 id 列表（确保为数字数组）
+        payload.shoppingCartIds = shoppingCartIds.map(id => Number(id));
+      } else {
+        ElMessage.error('缺少购物车信息，无法提交订单');
         return;
       }
-    } else if (Array.isArray(shoppingCartIds) && shoppingCartIds.length > 0) {
-      // 购物车下单：传递购物车 id 列表（确保为数字数组）
-      payload.shoppingCartIds = shoppingCartIds.map(id => Number(id));
+      // 确保商品ID和数量为null
+      payload.productId = null;
+      payload.quantity = null;
     }
 
     console.log('submit order payload:', payload);
@@ -463,6 +601,9 @@ const formatPhone = (phone = '') => {
 };
 
 onMounted(async () => {
+  // 重置购物车商品列表，确保每次刷新都重新获取数据
+  cartItems.value = [];
+  
   // 如果有预加载的地址数据（来自 BookDetail 或 Cart 的跳转前预取），优先使用以加快渲染
   try {
     const pref = sessionStorage.getItem('prefetchedAddressList');
@@ -474,17 +615,9 @@ onMounted(async () => {
   } catch (e) {
     console.warn('解析预加载地址失败', e);
   }
-  // 处理预加载的运费模板
-  try {
-    const prefTpl = sessionStorage.getItem('prefetchedShippingTemplates');
-    if (prefTpl) {
-      const parsed = JSON.parse(prefTpl);
-      shippingTemplates.value = Array.isArray(parsed) ? parsed.map(t => ({ id: t.id, name: t.name || t.templateName || t.title || (`模板-${t.id}`), raw: t })) : [];
-      sessionStorage.removeItem('prefetchedShippingTemplates');
-    }
-  } catch (e) {
-    console.warn('解析预加载运费模板失败', e);
-  }
+
+  // 尝试从sessionStorage中读取checkoutItems（仅作为备用）
+  let hasSessionData = false;
   try {
     const raw = sessionStorage.getItem('checkoutItems');
     if (raw) {
@@ -504,7 +637,8 @@ onMounted(async () => {
         }
 
         cartItems.value = parsed.map(i => ({
-          id: i.id || i.productId || i.productId,
+          id: i.id || i.productId,
+          productId: i.productId || i.id, // 保留productId字段
           title: i.title || i.bookName || i.productName || '商品',
           description: i.description || i.bookName || i.productDescription || '',
           sku: i.sku || '',
@@ -513,15 +647,15 @@ onMounted(async () => {
           cover: i.cover || i.coverUrl || i.productImage || '/images/new.png'
         }));
         sessionStorage.removeItem('checkoutItems');
-        return;
-      }
-      // 支持 parsed 为对象（UserCartVo）
-      if (parsed && parsed.buyNows && Array.isArray(parsed.buyNows)) {
+        hasSessionData = true;
+      } else if (parsed && parsed.buyNows && Array.isArray(parsed.buyNows)) {
+        // 支持 parsed 为对象（UserCartVo）
         activityDiscount.value = parsed.activityDiscount || null;
         originalTotal.value = parsed.originalTotal || null;
         if (typeof parsed.freight !== 'undefined') freight.value = Number(parsed.freight) || 0;
         cartItems.value = parsed.buyNows.map(i => ({
           id: i.id || i.productId,
+          productId: i.productId || i.id, // 保留productId字段
           title: i.title || i.bookName || i.productName || '商品',
           description: i.description || i.bookName || i.productDescription || '',
           sku: i.sku || '',
@@ -530,64 +664,94 @@ onMounted(async () => {
           cover: i.cover || i.coverUrl || i.productImage || '/images/new.png'
         }));
         sessionStorage.removeItem('checkoutItems');
-        return;
+        hasSessionData = true;
       }
     }
   } catch (e) {
     console.error('解析 checkoutItems 失败', e);
   }
 
+  // 获取source参数，默认为buynow
+  const source = route.query.source || 'buynow';
+  
+  // 处理商品详情页立即购买的情况（优先使用路由参数，即使有session数据也重新请求）
   const bookId = route.query.bookId;
   const qQuantity = route.query.quantity;
   if (bookId) {
     try {
-      // 请求商品详情并尝试调用后端 /buy 获取 originalTotal 与 activityDiscount
-      const res = await request.get(`/user/book/${bookId}`);
-      // 先把商品信息填充到 cartItems
-      const price = Number(res.price || res.salePrice || 0);
-      cartItems.value = [{
-        id: res.id || bookId,
-        title: res.bookName || res.title || res.productName || '商品',
-        description: res.description || res.bookDesc || '',
-        sku: res.sku || '',
-        price,
-        quantity: Number(qQuantity) || 1,
-        cover: res.coverUrl || res.productImage || res.cover || '/images/new.png'
-      }];
-      try {
-        const buyPayload = { productId: Number(bookId), quantity: Number(qQuantity) || 1 };
-        const buyRes = await request.post('/user/book/buy', buyPayload);
-        // buyRes should be UserBuyNowVo: { buy, activityDiscount, originalTotal }
-        if (buyRes) {
-          if (typeof buyRes.activityDiscount !== 'undefined') activityDiscount.value = buyRes.activityDiscount || null;
-          if (typeof buyRes.originalTotal !== 'undefined') originalTotal.value = buyRes.originalTotal || null;
-          if (typeof buyRes.freight !== 'undefined') freight.value = Number(buyRes.freight) || 0;
-        }
-      } catch (e) {
-        // 不阻塞页面，打印以便排查
-        console.warn('调用 /user/book/buy 失败', e);
+      // 使用新的 GET /user/book/buy 接口获取商品信息和优惠信息
+      const params = { productId: Number(bookId), quantity: Number(qQuantity) || 1, source: 'buynow' };
+      console.log('请求商品信息:', params);
+      const buyRes = await request.get('/user/book/buy', { params });
+      console.log('商品信息响应:', buyRes);
+      // buyRes should be UserBuyNowVo: { buy, activityDiscount, originalTotal }
+      if (buyRes && buyRes.buy) {
+        const buy = buyRes.buy;
+        if (typeof buyRes.activityDiscount !== 'undefined') activityDiscount.value = buyRes.activityDiscount || null;
+        if (typeof buyRes.originalTotal !== 'undefined') originalTotal.value = buyRes.originalTotal || null;
+        if (typeof buyRes.freight !== 'undefined') freight.value = Number(buyRes.freight) || 0;
+        
+        // 填充商品信息到 cartItems，使用UserBuy对象中的productId和quantity
+        cartItems.value = [{
+          id: buy.productId, // 直接使用buy.productId
+          productId: buy.productId, // 同时保存productId字段
+          title: buy.bookName || buy.title || buy.productName || '商品',
+          description: buy.description || buy.bookDesc || '',
+          sku: buy.sku || '',
+          price: Number(buy.price || 0) || 0,
+          quantity: buy.quantity || Number(qQuantity) || 1, // 优先使用buy.quantity
+          cover: buy.coverUrl || buy.productImage || buy.cover || '/images/new.png'
+        }];
+        console.log('商品信息填充完成:', cartItems.value);
       }
     } catch (e) {
       console.error('拉取商品信息失败', e);
+      ElMessage.error('拉取商品信息失败，请稍后重试');
+    }
+  } else if (!hasSessionData) {
+    // 处理购物车结算的情况（仅当没有session数据且没有bookId时）
+    const shoppingCartIds = route.query.shoppingCartIds;
+    if (shoppingCartIds) {
+      try {
+        // 使用新的 GET /user/shopping-cart/checkout 接口获取购物车商品信息
+        const ids = Array.isArray(shoppingCartIds) ? shoppingCartIds : [shoppingCartIds];
+        const params = { shippingAddressIds: ids.map(id => Number(id)), source: 'cart' };
+        console.log('请求购物车商品信息:', params);
+        const cartRes = await request.get('/user/shopping-cart/checkout', { params });
+        console.log('购物车商品信息响应:', cartRes);
+        // cartRes should be UserCartVo: { buyNows, activityDiscount, originalTotal }
+        if (cartRes && cartRes.buyNows && Array.isArray(cartRes.buyNows)) {
+          if (typeof cartRes.activityDiscount !== 'undefined') activityDiscount.value = cartRes.activityDiscount || null;
+          if (typeof cartRes.originalTotal !== 'undefined') originalTotal.value = cartRes.originalTotal || null;
+          if (typeof cartRes.freight !== 'undefined') freight.value = Number(cartRes.freight) || 0;
+          
+          // 填充购物车商品信息到 cartItems
+          cartItems.value = cartRes.buyNows.map(item => ({
+            id: item.id || item.productId,
+            title: item.title || item.bookName || item.productName || '商品',
+            description: item.description || item.bookName || item.productDescription || '',
+            sku: item.sku || '',
+            price: Number(item.price || item.totalPrice || 0) || 0,
+            quantity: Number(item.quantity) || Number(item.number) || 1,
+            cover: item.cover || item.coverUrl || item.productImage || '/images/new.png'
+          }));
+          console.log('购物车商品信息填充完成:', cartItems.value);
+        }
+      } catch (e) {
+        console.error('拉取购物车商品信息失败', e);
+        ElMessage.error('拉取购物车商品信息失败，请稍后重试');
+      }
     }
   }
 
   try {
     await loadAddressList();
-  } catch (e) {
-    console.error('加载地址列表失败', e);
-  }
-  try {
-    await loadShippingTemplates();
-    // 如果还未选择模板，默认选第一个并尝试计算运费
-    if (!selectedShippingTemplateId.value && shippingTemplates.value.length > 0) {
-      selectedShippingTemplateId.value = shippingTemplates.value[0].id;
-      if (selectedAddress.value && selectedAddress.value.id) {
-        await calcShippingCost(selectedShippingTemplateId.value, selectedAddress.value.id);
-      }
+    // 加载地址后计算运费
+    if (selectedAddress.value && selectedAddress.value.id) {
+      await calcShippingCost(selectedAddress.value.id);
     }
   } catch (e) {
-    console.warn('加载运费模板失败或计算运费失败', e);
+    console.error('加载地址列表失败', e);
   }
 });
 </script>
@@ -760,48 +924,22 @@ onMounted(async () => {
   gap: 20px;
   padding: 0;
   background: transparent;
+  align-items: flex-start;
 }
 .content-left {
-  flex: 0 0 288px;
-  max-width: 288px;
-}
-.content-right {
   flex: 3;
   background: #fff;
   border-radius: 4px;
   overflow: hidden;
 }
+.content-right {
+  flex: 1;
+  min-width: 300px;
+  position: sticky;
+  top: 20px;
+}
 
-/* 左侧配送框 (保持不变) */
-.delivery-box {
-  background: #fff;
-  border-radius: 4px;
-  padding: 20px;
-  width: 288px;
-  height: 264px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-.delivery-time {
-  display: flex;
-  align-items: center;
-  margin-bottom: 15px;
-}
-.delivery-time .label {
-  margin-right: 10px;
-  color: #333;
-  font-size: 14px;
-}
-.delivery-tip {
-  font-size: 12px;
-  color: #666;
-  line-height: 1.6;
-}
-.date-highlight {
-  color: #ff5000;
-  font-weight: bold;
-}
+
 
 /* 右侧商品表格 (保持不变) */
 .order-summary-header {
@@ -903,94 +1041,251 @@ onMounted(async () => {
   font-size: 20px;
 }
 
-/* 3. 底部悬浮栏 (保持不变) */
-.bottom-bar {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  width: 100%;
-  height: 70px;
-  background: #fff;
-  border-top: 1px solid #e4e4e4;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 100;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+/* 3. 金额信息区域 */
+.payment-details {
+  padding: 20px;
+  background: #f9f9f9;
+  border-radius: 4px;
+  height: fit-content;
+  max-height: 500px;
+  overflow-y: auto;
 }
-.bottom-bar > div {
-  width: 1200px;
+.payment-details h3 {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 20px;
+  color: #333;
+}
+.detail-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0 20px;
-}
-.bar-left {
-  display: flex;
-  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #eee;
   font-size: 14px;
   color: #666;
+  height: 48px;
+  box-sizing: border-box;
 }
-.bar-left .label {
+.detail-item .price {
+  font-weight: bold;
+  text-align: right;
+  flex-shrink: 0;
+  width: 100px;
+  color: #333;
+}
+.detail-item .price.negative {
+  color: #4caf50;
+  font-size: 12px;
+}
+.coupon-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  width: 100px;
+  justify-content: flex-end;
+}
+.coupon-value {
+  color: #4caf50;
+  font-weight: bold;
+  text-align: right;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+/* 积分抵扣样式 */
+.points-item {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+.points-item:hover:not(.points-disabled) {
+  background-color: rgba(0, 0, 0, 0.02);
+}
+.points-item.points-disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.points-section {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+}
+.points-value {
+  font-size: 12px;
   color: #999;
-  margin-right: 5px;
 }
-.contact-info {
-  margin-left: 20px;
-  padding-left: 20px;
-  border-left: 1px solid #eee;
+/* iOS风格开关 */
+.points-switch {
+  flex-shrink: 0;
 }
-.bar-right {
+.switch-track {
+  width: 44px;
+  height: 24px;
+  background-color: #e0e0e0;
+  border-radius: 12px;
+  position: relative;
+  transition: background-color 0.3s;
+  cursor: pointer;
+}
+.switch-track.switch-active {
+  background-color: #4caf50;
+}
+.switch-thumb {
+  width: 20px;
+  height: 20px;
+  background-color: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+.switch-track.switch-active .switch-thumb {
+  transform: translateX(20px);
+}
+/* 费用明细分组 */
+.detail-item:first-child {
+  margin-bottom: 16px;
+}
+/* 合计区域 */
+.total-amount {
+  font-size: 16px;
+  font-weight: bold;
+  color: #333;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 2px solid #e0e0e0;
+  height: 60px;
+  box-sizing: border-box;
+}
+.total-amount .price {
+  font-size: 24px;
+  color: #ff5000;
+  font-weight: bold;
+  text-align: right;
+  flex-shrink: 0;
+  width: 100px;
+}
+/* 底部按钮 */
+.btn-submit {
+  width: 100%;
+  height: 48px;
+  font-size: 16px;
+  border-radius: 4px;
+  background: #ff5000;
+  border: none;
+  margin-top: 24px;
+  font-weight: bold;
+}
+.btn-submit:hover {
+  background: #ff6b2a;
+  border-color: #ff6b2a;
+}
+
+/* 优惠券区域 */
+.coupon-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+.coupon-value {
+  color: #ff5000;
+  font-weight: bold;
+  text-align: right;
+}
+.coupon-arrow {
+  transition: transform 0.3s;
+  font-size: 12px;
+}
+.coupon-arrow.rotated {
+  transform: rotate(180deg);
+}
+.coupon-dropdown {
+  margin-top: 0;
+  margin-bottom: 20px;
+  padding: 10px;
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 4px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+.coupon-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.coupon-item {
+  background: url('/Coupon/C2.jpg') no-repeat center center;
+  background-size: cover;
+  border: none;
+  border-radius: 8px;
+  width: 100%;
+  height: 94px;
+  padding: 12px;
+  position: relative;
+  overflow: hidden;
   display: flex;
   align-items: center;
 }
-.total-info {
-  text-align: right;
-  margin-right: 20px;
+.coupon-select {
+  margin-right: 15px;
+  z-index: 1;
 }
-.total-info .count {
-  display: block;
-  font-size: 12px;
-  color: #999;
-}
-.total-info .pay-amount {
-  font-size: 16px;
-  color: #ff5000;
-  font-weight: bold;
-}
-.total-info .symbol {
-  font-size: 14px;
-}
-.total-info .number {
-  font-size: 24px;
-  margin-left: 2px;
-}
-.total-info .freight-tiny {
-  font-size: 12px;
-  color: #999;
-  margin-left: 10px;
-}
-.action-area {
+.coupon-content {
+  flex: 1;
+  z-index: 1;
   display: flex;
   flex-direction: column;
-  justify-content: center;
+  height: 70px;
+  justify-content: space-between;
 }
-.countdown {
-  font-size: 12px;
-  color: #999;
-  margin-bottom: 5px;
-  text-align: right;
+.coupon-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
 }
-.countdown span {
+.coupon-amount {
+  font-size: 22px;
+  font-weight: bold;
   color: #ff5000;
+  line-height: 1;
 }
-.btn-pay {
-  width: 140px;
-  height: 40px;
-  font-size: 16px;
-  border-radius: 2px;
+.coupon-type {
+  font-size: 10px;
+  color: #fff;
   background: #ff5000;
-  border: none;
+  padding: 1px 6px;
+  border-radius: 8px;
+  display: inline-block;
+}
+.coupon-desc {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 4px;
+}
+.coupon-expiry {
+  font-size: 10px;
+  color: #999;
+}
+
+/* 禁用的优惠券样式 */
+.coupon-item.coupon-disabled {
+  filter: grayscale(100%);
+  opacity: 0.7;
+}
+.coupon-item.coupon-disabled .coupon-amount {
+  color: #999;
+}
+.coupon-item.coupon-disabled .coupon-type {
+  background: #999;
+}
+.coupon-item.coupon-disabled .coupon-desc,
+.coupon-item.coupon-disabled .coupon-expiry {
+  color: #999;
 }
 
 /* Address modal form helpers moved into AddressDialog.vue (scoped) */

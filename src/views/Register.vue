@@ -109,7 +109,7 @@ const doRegister = async () => {
     });
     
     if (userData && userData.token) {
-      sessionStorage.setItem('authToken', userData.token);
+      sessionStorage.setItem('token', userData.token);
       const userToSave = { username: userData.username, avatar: userData.avatar };
       saveCurrentUser(userToSave);
       window.dispatchEvent(new Event('user-updated'));

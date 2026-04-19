@@ -129,7 +129,7 @@ const priceWarning = ref(false);
 
 // 检查登录状态
 const checkLoginStatus = () => {
-  const token = sessionStorage.getItem('authToken');
+  const token = sessionStorage.getItem('token');
   isLoggedIn.value = !!token;
   console.log('登录状态:', isLoggedIn.value ? '已登录' : '未登录');
   return isLoggedIn.value;

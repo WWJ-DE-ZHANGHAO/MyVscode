@@ -162,7 +162,7 @@ const isLoggedIn = ref(false);
 
 // 检查登录状态
 const checkLoginStatus = () => {
-  const token = sessionStorage.getItem('authToken');
+  const token = sessionStorage.getItem('token');
   isLoggedIn.value = !!token;
   console.log('========== 首页加载 ==========');
   console.log('登录状态:', isLoggedIn.value ? '已登录' : '未登录');
@@ -442,7 +442,7 @@ const loadAllData = async () => {
 
 // 监听storage变化
 window.addEventListener('storage', (e) => {
-  if (e.key === 'authToken') {
+  if (e.key === 'token') {
     console.log('storage事件 - token变化:', !!e.newValue);
     isLoggedIn.value = !!e.newValue;
     loadAllData();

@@ -71,7 +71,7 @@ instance.interceptors.response.use(
 
         // 如果是未授权，跳转登录
         if (res.code === 401) {
-          sessionStorage.removeItem('authToken');
+          sessionStorage.removeItem('token');
           sessionStorage.removeItem('userInfo');
           router.push('/login');
         }
@@ -94,7 +94,7 @@ instance.interceptors.response.use(
       
       if (status === 401) {
         ElMessage.error('登录已过期，请重新登录');
-        sessionStorage.removeItem('authToken');
+        sessionStorage.removeItem('token');
         sessionStorage.removeItem('userInfo');
         router.push('/login');
       } else if (status === 403) {

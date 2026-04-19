@@ -181,9 +181,10 @@ const checkout = () => {
 			// 调用后端 checkout 接口，传入已选购物车 id 列表，后端返回 UserCartVo
 			try {
 				const ids = selectedIds.value;
-				// 后端接口为 @PostMapping("/checkout") 并通过 @RequestParam("shippingAddressIds") 接收 id 列表
-				// 使用 POST 请求并把 ids 放在 params（query string），以确保后端能通过 @RequestParam 正确接收
-				const res = await request.post('/user/shopping-cart/checkout', null, { params: { shippingAddressIds: ids } });
+				// 后端接口已修改为 @GetMapping("/checkout") 并通过 @RequestParam 接收参数
+				// 使用 GET 请求并把 ids 和 source 放在 params（query string）
+				const params = { shippingAddressIds: ids, source: 'cart' };
+				const res = await request.get('/user/shopping-cart/checkout', { params });
 				// res 应为 UserCartVo: { shoppingCartIds: [...], buyNowVos: [...] }
 								// 后端可能返回 UserCartVo: { buyNows: [...], activityDiscount, originalTotal }
 								let checkoutPayload = null;
@@ -218,7 +219,7 @@ const checkout = () => {
 										sessionStorage.setItem('prefetchedShippingTemplates', JSON.stringify(tpl));
 									}
 								} catch (e) { console.warn('预加载运费模板失败', e); }
-				router.push({ name: 'CreateOrder', query: { source: 'cart' } });
+				router.push({ name: 'CreateOrder', query: { shoppingCartIds: ids, source: 'cart' } });
 			} catch (err) {
 				console.error('购物车结算接口调用失败', err);
 				ElMessage.error('结算失败，请重试');

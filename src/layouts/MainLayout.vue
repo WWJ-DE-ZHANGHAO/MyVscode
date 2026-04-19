@@ -75,6 +75,9 @@
     <!-- 【新增】全局“回到顶部”组件 -->
     <!-- 放置在这里，确保它在所有子页面之上，且对所有页面生效 -->
     <BackToTop />
+    
+    <!-- 【新增】客服弹窗 -->
+    <ServiceDialog v-model:visible="serviceDialogVisible" />
   </div>
 </template>
 
@@ -85,12 +88,14 @@ import { ShoppingCart, Headset } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 // 1. 引入 BackToTop、CartPanel 组件
 import BackToTop from '@/components/BackToTop.vue';
+import ServiceDialog from '@/components/ServiceDialog.vue';
 
 const router = useRouter();
 const route = useRoute();
 
 // 用于强制重新挂载路由组件（当用户点击已在页面上的导航时触发刷新）
 const refreshKey = ref(0);
+const serviceDialogVisible = ref(false);
 
 const cartItems = ref([]);
 const searchQuery = ref('');
@@ -165,7 +170,7 @@ const handleSearch = () => {
 };
 
 const handleServiceClick = () => {
-  ElMessage.info('联系客服：400-123-4567\n在线时间：9:00 - 21:00');
+  serviceDialogVisible.value = true;
 };
 
 const logout = () => {

@@ -11,8 +11,8 @@
             </div>
             <div class="user-info">
               <h3 class="username">{{ userInfoRef.username || '用户' }}</h3>
-              <p class="level" v-if="userInfoRef.level">
-                <el-tag type="warning">{{ levelName }}</el-tag>
+              <p class="level">
+                <el-tag type="warning">{{ memberLevel?.id === 1 ? '普通会员' : memberLevel?.id === 2 ? '白银会员' : memberLevel?.id === 3 ? '黄金会员' : '普通会员' }}</el-tag>
                 积分：{{ userInfoRef.points || 0 }}
               </p>
               <el-button size="small" type="primary" plain @click="openEditProfile">修改资料</el-button>
@@ -192,22 +192,25 @@
           <!-- 会员中心 -->
           <div v-show="activeMainTab === 'member'" class="tab-content">
             <h2 class="title">会员中心</h2>
-            <div class="member-card">
+            <div v-if="loadingMember" class="member-loading">
+              <el-skeleton :rows="3" animated />
+            </div>
+            <div v-else class="member-card" :style="{ backgroundImage: `url('/Member/member${memberLevel?.id === 1 ? 2 : memberLevel?.id === 2 ? 1 : 3}.jpg')`, backgroundSize: 'cover', backgroundRepeat: 'no-repeat', width: '870px', height: '160px' }">
               <div class="member-top">
                 <div>
-                  <div class="points">积分：{{ userInfoRef.points }}</div>
-                  <div>等级：{{ levelName }}</div>
+                  <div class="points">积分：{{ userInfoRef.points || 0 }}</div>
+                  <div>等级：{{ memberLevel?.id === 1 ? '普通会员' : memberLevel?.id === 2 ? '白银会员' : memberLevel?.id === 3 ? '黄金会员' : '普通会员' }}</div>
                 </div>
                 <div>
-                  <div>等级经验：{{ userInfoRef.member_exp }} / {{ nextLevelExp }}</div>
-                  <div class="exp-bar"><el-progress :percentage="expPercent" /></div>
+                  <div>等级经验：{{ userInfoRef.growthValue || 0 }} / {{ getNextLevelGrowthValue() }}</div>
+                  <div class="exp-bar"><el-progress :percentage="Math.min(100, (userInfoRef.growthValue || 0) / (getNextLevelGrowthValue() || 1) * 100)" /></div>
                 </div>
               </div>
-              <!-- 会员权益（保留你要的可实现功能） -->
+              <!-- 会员权益 -->
               <div class="rights">
-                <div class="item">🎫 会员优惠券</div>
-                <div class="item">💰 积分抵现</div>
-                <div class="item">🚚 免运费特权</div>
+                <div class="item">🎫 每月{{ memberLevel?.couponQuota || 0 }}张会员专属优惠券</div>
+                <div class="item">💰 积分抵扣：100积分可兑换{{ (memberLevel?.pointsExchangeRate || 0) * 100 }}元</div>
+                <div class="item">🚚 {{ memberLevel?.freeShippingThreshold === 0 ? '无门槛' : '满' + memberLevel?.freeShippingThreshold + '元' }}免运费</div>
               </div>
             </div>
           </div>
@@ -218,12 +221,12 @@
             <div class="coupon-list">
               <div v-for="c in userCoupons" :key="c.id" class="coupon-item">
                 <div class="left">
-                  <div class="price">¥{{ c.reduceAmount }}</div>
-                  <div class="rule">满{{ c.minAmount }}可用</div>
+                  <div class="price">¥{{ c.discountValue }}</div>
+                  <div class="rule">{{ c.type === 1 ? `满${c.minOrderAmount}可用` : '' }}</div>
                 </div>
                 <div class="right">
                   <div class="name">{{ c.name }}</div>
-                  <div class="time">{{ c.endTime }}</div>
+                  <div class="time">有效期: {{ formatCouponDate(c.validStartTime) }}至{{ formatCouponDate(c.validEndTime) }}</div>
                   <el-button size="small" type="primary">立即使用</el-button>
                 </div>
               </div>
@@ -366,7 +369,8 @@ const userInfoRef = reactive({
   username: '',
   level: 2,
   points: 0,
-  member_exp: 0,
+  growthValue: 0,
+  memberLevelId: 1,
   avatar: '',
   phone: '',
   password: '',
@@ -380,8 +384,11 @@ const loadCurrentUser = () => {
       const u = JSON.parse(raw)
       if (u) {
         userInfoRef.username = u.username || ''
-        userInfoRef.avatar = u.avatar || ''
+        userInfoRef.avatar = (u.avatar || '').trim().replace(/`/g, '')
         userInfoRef.phone = u.phone || ''
+        userInfoRef.points = u.points || 0
+        userInfoRef.growthValue = u.growthValue || 0
+        userInfoRef.memberLevelId = u.memberLevelId || 1
         // 后端 gender 为数字 0/1/2
         userInfoRef.gender = u.gender === 1 ? 'male' : (u.gender === 2 ? 'female' : 'male')
       }
@@ -423,11 +430,14 @@ const fetchUserFromServer = async () => {
     const u = res && res.id ? res : (res && res.data ? res.data : null)
     if (u) {
       userInfoRef.username = u.username || ''
-      userInfoRef.avatar = u.avatar || ''
+      userInfoRef.avatar = (u.avatar || '').trim().replace(/`/g, '')
       userInfoRef.phone = u.phone || ''
       userInfoRef.gender = u.gender === 1 ? 'male' : (u.gender === 2 ? 'female' : 'male')
+      userInfoRef.points = u.points || 0
+      userInfoRef.growthValue = u.growthValue || 0
+      userInfoRef.memberLevelId = u.memberLevelId || 1
       // 更新 sessionStorage 以便其他页面使用
-      try { sessionStorage.setItem('currentUser', JSON.stringify({ username: userInfoRef.username, avatar: userInfoRef.avatar, phone: userInfoRef.phone, gender: u.gender })) } catch (e) {}
+      try { sessionStorage.setItem('currentUser', JSON.stringify({ username: userInfoRef.username, avatar: userInfoRef.avatar, phone: userInfoRef.phone, gender: u.gender, points: u.points, growthValue: u.growthValue, memberLevelId: u.memberLevelId })) } catch (e) {}
     }
     return u
   } catch (e) {
@@ -453,7 +463,7 @@ const onProfileSaved = async (payload) => {
     }
 
     // 若未能从后端拉取，则回退为使用前端传回的 payload 更新缓存
-    Object.assign(userInfoRef, payload)
+    Object.assign(userInfoRef, { ...payload, avatar: (payload.avatar || '').trim().replace(/`/g, '') })
     const save = {
       username: userInfoRef.username,
       avatar: userInfoRef.avatar,
@@ -486,6 +496,10 @@ const loadingOrders = ref(false)
 const addresses = ref([])
 const loadingAddresses = ref(false)
 
+// 优惠券数据
+const userCoupons = ref([])
+const loadingCoupons = ref(false)
+
 const fetchOrders = async () => {
   loadingOrders.value = true
   try {
@@ -512,6 +526,27 @@ const fmtDate = (d) => {
     if (isNaN(dt)) return d
     return dt.toLocaleString()
   } catch (e) { return d }
+}
+
+// 格式化优惠券日期
+const formatCouponDate = (dateStr) => {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+}
+
+// 获取用户优惠券
+const fetchCoupons = async () => {
+  loadingCoupons.value = true
+  try {
+    const res = await request.get('/user/user-coupon-record/list')
+    userCoupons.value = Array.isArray(res) ? res : (res && res.data ? res.data : [])
+  } catch (e) {
+    console.error('fetchCoupons failed', e)
+    userCoupons.value = []
+  } finally {
+    loadingCoupons.value = false
+  }
 }
 
 // 订单状态筛选与操作
@@ -1001,10 +1036,35 @@ const fetchAddresses = async () => {
   finally { loadingAddresses.value = false }
 }
 
-const selectMainTab = (name) => {
+// 会员等级数据
+const memberLevel = ref(null)
+const loadingMember = ref(false)
+
+// 获取会员等级
+const fetchMemberLevel = async () => {
+  loadingMember.value = true
+  try {
+    const res = await request.get('/user/user/Member')
+    memberLevel.value = res || null
+  } catch (e) {
+    console.error('获取会员等级失败', e)
+    memberLevel.value = null
+  } finally {
+    loadingMember.value = false
+  }
+}
+
+// 获取当前会员等级的minGrowthValue
+const getNextLevelGrowthValue = () => {
+  return memberLevel.value?.minGrowthValue || 0
+}
+
+const selectMainTab = async (name) => {
   activeMainTab.value = name
   if (name === 'orders') fetchOrders()
   if (name === 'addresses') fetchAddresses()
+  if (name === 'coupon') await fetchCoupons()
+  if (name === 'member') await fetchMemberLevel()
 }
 
 // 切换主筛选时，重置二级筛选
@@ -1053,11 +1113,7 @@ const levelName = computed(() => {
 const nextLevelExp = computed(() => userInfoRef.level * 500)
 const expPercent = computed(() => (userInfoRef.member_exp / nextLevelExp.value) * 100)
 
-// ============== 优惠券 ==============
-const userCoupons = ref([
-  { id: 1, name: '满100减20', reduceAmount: 20, minAmount: 100, endTime: '2026-05-01' },
-  { id: 2, name: '满200减50', reduceAmount: 50, minAmount: 200, endTime: '2026-05-10' },
-])
+// ============== 优惠券 =
 
 // ============== 浏览历史 ==============
 const historyList = ref([
@@ -1105,10 +1161,67 @@ const clearHistory = () => { historyList.value = [] }
   padding: 6px 12px;
   border-radius: 20px;
 }
-.coupon-list { margin-top: 16px; }
-.coupon-item { display: flex; justify-content: space-between; padding: 16px; border: 1px dashed #ff6633; border-radius: 8px; margin-bottom: 12px; }
-.coupon-item .left { text-align: center; }
-.coupon-item .price { font-size: 22px; color: #ff6633; font-weight: bold; }
+.coupon-list { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 16px; }
+.coupon-item {
+  background: url('/Coupon/C2.jpg') no-repeat center center;
+  background-size: cover;
+  border: none;
+  border-radius: 8px;
+  width: 280px;
+  height: 94px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+  margin-bottom: 12px;
+}
+.coupon-item .left {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.coupon-item .price {
+  font-size: 22px;
+  color: #ff6633;
+  font-weight: bold;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.coupon-item .rule {
+  font-size: 12px;
+  color: #666;
+}
+.coupon-item .right {
+  position: absolute;
+  left: 90px;
+  top: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  height: 70px;
+  justify-content: space-between;
+}
+.coupon-item .name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 4px;
+}
+.coupon-item .time {
+  font-size: 12px;
+  color: #999;
+  margin-bottom: 8px;
+}
+.coupon-item .el-button {
+  align-self: flex-end;
+  font-size: 12px;
+  padding: 4px 12px;
+  height: auto;
+}
 
 /* 退款申请弹窗样式 */
 .refund-order-info {
