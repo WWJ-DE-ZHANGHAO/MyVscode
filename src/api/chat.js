@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 const chatRequest = axios.create({
-  baseURL: import.meta.env.VITE_BASE_API + '/api'
+  baseURL: '/api'
 })
 
 // 添加请求拦截器，自动添加token

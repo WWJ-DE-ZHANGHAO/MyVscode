@@ -1,19 +1,16 @@
 <template>
   <div class="admin-chat-container">
-    <!-- 顶部标题栏 -->
     <div class="chat-header">
-      <h2>全渠道客服中心</h2>
+      <h2>客服中心</h2>
     </div>
 
     <div class="chat-main-wrap">
-      <!-- ==================== 左侧：会话列表栏 ==================== -->
+      <!-- 左侧会话列表 -->
       <div class="session-left">
         <div class="session-title">
-          <span class="active-tab">会话</span>
-          <span>历史</span>
+          <span class="active-tab">会话列表</span>
         </div>
         <div class="session-list">
-          <!-- 遍历所有用户会话 -->
           <div
             v-for="session in sessionList"
             :key="session.userId"
@@ -21,12 +18,10 @@
             :class="{ 'active': currentChatUserId === session.userId }"
             @click="switchSession(session)"
           >
-            <!-- 用户头像 -->
             <div class="session-avatar"></div>
             <div class="session-info">
               <div class="session-top">
                 <div class="session-user-name">用户{{ session.userId }}</div>
-                <!-- 未读消息红点 -->
                 <div v-if="session.adminUnreadCount > 0" class="unread-badge">
                   {{ session.adminUnreadCount }}
                 </div>
@@ -38,39 +33,41 @@
         </div>
       </div>
 
-      <!-- ==================== 中间：聊天内容窗口 ==================== -->
+      <!-- 中间聊天窗口 -->
       <div class="chat-middle">
         <div class="chat-middle-header" v-if="currentChatUserId">
           <span>用户{{ currentChatUserId }}</span>
+          <span class="connection-status" :class="connectionStatus">
+            {{ connectionText }}
+          </span>
         </div>
 
         <div class="chat-message-box" ref="msgBoxRef">
           <div v-if="!currentChatUserId" class="empty-tip">请从左侧选择聊天用户</div>
 
-          <!-- 消息气泡遍历 -->
           <div v-for="msg in messageList" :key="msg.id" class="msg-item" :class="msg.senderType">
-            <!-- 用户发来的消息（左侧气泡） -->
+            <!-- 用户消息 -->
             <div v-if="msg.senderType === 'USER'" class="msg-left">
               <div class="msg-avatar"></div>
               <div class="msg-content-wrap">
-                <div v-if="splitContent(msg.content).text" class="msg-text">
-                  {{ splitContent(msg.content).text }}
+                <div v-if="msg.msgType === 'TEXT'" class="msg-text">
+                  {{ msg.content }}
                 </div>
-                <div v-if="splitContent(msg.content).imgUrl" class="msg-img">
-                  <img :src="splitContent(msg.content).imgUrl" alt="图片消息" />
+                <div v-if="msg.msgType === 'IMAGE'" class="msg-img">
+                  <img :src="msg.content" alt="图片消息" />
                 </div>
                 <div class="msg-time">{{ formatTime(msg.createTime) }}</div>
               </div>
             </div>
 
-            <!-- 客服自己发送的消息（右侧气泡） -->
+            <!-- 客服消息 -->
             <div v-if="msg.senderType === 'ADMIN'" class="msg-right">
               <div class="msg-content-wrap">
-                <div v-if="splitContent(msg.content).text" class="msg-text">
-                  {{ splitContent(msg.content).text }}
+                <div v-if="msg.msgType === 'TEXT'" class="msg-text">
+                  {{ msg.content }}
                 </div>
-                <div v-if="splitContent(msg.content).imgUrl" class="msg-img">
-                  <img :src="splitContent(msg.content).imgUrl" alt="图片消息" />
+                <div v-if="msg.msgType === 'IMAGE'" class="msg-img">
+                  <img :src="msg.content" alt="图片消息" />
                 </div>
                 <div class="msg-time">{{ formatTime(msg.createTime) }}</div>
               </div>
@@ -79,7 +76,7 @@
           </div>
         </div>
 
-        <!-- 底部输入发送栏 -->
+        <!-- 底部输入栏 -->
         <div class="chat-bottom-input" v-if="currentChatUserId">
           <div class="input-tool">
             <label class="img-upload-btn">
@@ -96,11 +93,10 @@
         </div>
       </div>
 
-      <!-- ==================== 右侧：用户信息面板 ==================== -->
+      <!-- 右侧用户信息面板 -->
       <div class="info-right" v-if="currentChatUserId">
         <div class="info-tab">
           <span class="active">客户信息</span>
-          <span>工单</span>
         </div>
         <div class="info-form">
           <div class="info-item">
@@ -131,480 +127,770 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { Client } from '@stomp/stompjs'
-import SockJS from 'sockjs-client' // 【关键】SockJS适配后端
+import SockJS from 'sockjs-client'
 import { getChatHistory, getChatSessionList, markMsgRead } from '@/api/chat'
 import dayjs from 'dayjs'
-
-// 客服固定自身ID
-const ADMIN_ID = 1
+import { ElMessage } from 'element-plus'
+import request from '@/utils/request'
 
 // 全局变量
-const sessionList = ref([]) // 左侧所有用户会话
-const currentChatUserId = ref(null) // 当前选中聊天的用户ID
-const messageList = ref([]) // 当前窗口消息列表
+const sessionList = ref([])
+const currentChatUserId = ref(null)
+const messageList = ref([])
 const sendContent = ref('')
-const imgUrl = ref('')
 const msgBoxRef = ref(null)
 let stompClient = null
+const isConnected = ref(false)
+const connectionStatus = ref('disconnected')
+const connectionText = ref('未连接')
+let reconnectTimer = null
+let reconnectAttempts = 0
+const MAX_RECONNECT_ATTEMPTS = 5
 
-// 页面挂载初始化
-onMounted(async () => {
-  // 1. 加载全部用户会话列表（解决左侧空白无数据问题）
-  await getSessionList()
-  // 2. 初始化客服端WebSocket正确连接
-  initStompConnect()
-})
+// 获取 token 的函数
+const getToken = () => {
+  let token = sessionStorage.getItem('token')
+  if (!token) {
+    token = localStorage.getItem('token')
+  }
+  return token
+}
 
-// 加载会话列表（修复304缓存+数据渲染）
-const getSessionList = async () => {
+// 解析 adminId
+const getAdminId = () => {
+  const token = getToken()
+  if (!token) return 1
   try {
-    const res = await getChatSessionList()
-    if (res.data.code === 1 && res.data.data) {
-      sessionList.value = res.data.data
-    }
-    console.log('✅ 会话列表数据', sessionList.value)
-  } catch (err) {
-    console.error('会话列表加载失败', err)
+    const payload = JSON.parse(atob(token.split('.')[1]))
+    return payload.adminId || payload.id || 1
+  } catch (e) {
+    console.error('解析token失败', e)
+    return 1
   }
 }
 
-// ====================== 【核心修复】客服端SockJS正确连接 ======================
-const initStompConnect = () => {
-  const adminToken = localStorage.getItem('ADMIN_TOKEN')
-  console.log('客服端Token', adminToken)
+const adminId = ref(getAdminId())
 
+// 初始化 WebSocket 连接
+const initStompConnection = () => {
+  const token = getToken()
+  
+  if (!token) {
+    console.error('未找到管理员token，请先登录')
+    connectionStatus.value = 'disconnected'
+    connectionText.value = '未登录'
+    ElMessage.error('请先登录')
+    return
+  }
+
+  // 清除重连定时器
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+    reconnectTimer = null
+  }
+
+  console.log('开始建立客服端 WebSocket 连接...')
+  connectionStatus.value = 'connecting'
+  connectionText.value = '连接中...'
+
+  // 重要：token 通过 URL 参数传递（SockJS 不支持自定义 headers）
+  const wsUrl = `http://localhost:8080/ws?token=${encodeURIComponent(token)}`
+  console.log('连接URL:', wsUrl.replace(token, 'token=***'))
+  
   stompClient = new Client({
-    webSocketFactory: () => {
-      return new SockJS('http://localhost:8080/ws')
-    },
-    connectHeaders: {
-      token: adminToken // 客服端专属请求头token，完全匹配后端拦截器
-    },
+    webSocketFactory: () => new SockJS(wsUrl),
+    connectHeaders: {},  // 清空，不使用 headers
+    heartbeatIncoming: 0,
+    heartbeatOutgoing: 0,
     debug: (str) => {
-      console.log('客服端STOMP日志', str)
+      // 只打印重要信息，避免日志过多
+      if (str.includes('CONNECTED') || str.includes('ERROR')) {
+        console.log('STOMP:', str)
+      }
     }
   })
 
   stompClient.onConnect = (frame) => {
-    console.log('✅ 客服端WebSocket连接成功！', frame)
+    console.log('✅ 客服端 WebSocket 连接成功！', frame)
+    isConnected.value = true
+    connectionStatus.value = 'connected'
+    connectionText.value = '在线'
+    reconnectAttempts = 0
+
     // 订阅所有用户发来的全局广播消息
     stompClient.subscribe('/topic/admin.messages', (message) => {
       const msgData = JSON.parse(message.body)
-      console.log('收到用户新消息', msgData)
-      // 新消息进来，刷新会话列表更新未读数
+      console.log('📨 收到用户消息:', msgData)
+      
+      // 刷新会话列表更新未读数
       getSessionList()
+      
+      // 统一转换为数字比较
+      const currentId = Number(currentChatUserId.value)
+      const senderId = Number(msgData.senderId)
+      
       // 如果是当前聊天用户，消息追加到窗口
-      if (currentChatUserId.value === msgData.senderId) {
+      if (currentChatUserId.value && currentId === senderId) {
         messageList.value.push(msgData)
         scrollToBottom()
       }
+      // 如果没有当前聊天用户，自动切换到该用户
+      else if (!currentChatUserId.value && msgData.senderType === 'USER') {
+        currentChatUserId.value = msgData.senderId
+        loadChatHistory(msgData.senderId)
+      }
     })
+    
+    console.log('✅ 已订阅 /topic/admin.messages')
   }
 
-  stompClient.onStompError = (frame) => {
-    console.error('❌ 客服端连接失败', frame.headers['message'])
+  stompClient.onStompError = (error) => {
+    console.error('STOMP 错误:', error)
+    connectionStatus.value = 'disconnected'
+    connectionText.value = '连接失败'
+    isConnected.value = false
+    scheduleReconnect()
+  }
+
+  stompClient.onWebSocketError = (error) => {
+    console.error('WebSocket 错误:', error)
+    connectionStatus.value = 'disconnected'
+    connectionText.value = '连接错误'
+    isConnected.value = false
+    scheduleReconnect()
+  }
+
+  stompClient.onDisconnect = () => {
+    console.log('WebSocket 连接已断开')
+    isConnected.value = false
+    connectionStatus.value = 'disconnected'
+    connectionText.value = '已断开'
+    scheduleReconnect()
   }
 
   stompClient.activate()
 }
 
+// 重连逻辑
+const scheduleReconnect = () => {
+  if (reconnectTimer) return
+  if (reconnectAttempts >= MAX_RECONNECT_ATTEMPTS) {
+    console.error('重连次数已达上限，请手动刷新页面')
+    ElMessage.error('连接失败，请刷新页面重试')
+    return
+  }
+  
+  reconnectAttempts++
+  const delay = Math.min(5000 * reconnectAttempts, 30000)
+  console.log(`${delay/1000}秒后进行第${reconnectAttempts}次重连...`)
+  
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null
+    initStompConnection()
+  }, delay)
+}
+
+// 加载会话列表
+const getSessionList = async () => {
+  try {
+    const res = await getChatSessionList()
+    
+    if (Array.isArray(res.data)) {
+      sessionList.value = res.data.map(session => ({
+        ...session,
+        userId: Number(session.userId)
+      }))
+      console.log('✅ 会话列表加载成功', sessionList.value.length, '个会话')
+    } else if (res.data && res.data.code === 1 && res.data.data) {
+      sessionList.value = res.data.data.map(session => ({
+        ...session,
+        userId: Number(session.userId)
+      }))
+      console.log('✅ 会话列表加载成功', sessionList.value.length, '个会话')
+    } else {
+      sessionList.value = []
+    }
+  } catch (err) {
+    console.error('会话列表加载失败', err)
+    sessionList.value = []
+  }
+}
+
+// 加载聊天历史
+const loadChatHistory = async (userId) => {
+  try {
+    const res = await getChatHistory(userId, adminId.value)
+    
+    if (Array.isArray(res.data)) {
+      messageList.value = res.data
+      console.log('✅ 历史消息加载成功', messageList.value.length, '条消息')
+      scrollToBottom()
+    } else if (res.data && res.data.code === 1 && res.data.data) {
+      messageList.value = res.data.data
+      console.log('✅ 历史消息加载成功', messageList.value.length, '条消息')
+      scrollToBottom()
+    } else {
+      messageList.value = []
+    }
+  } catch (error) {
+    console.error('加载历史消息失败', error)
+    messageList.value = []
+  }
+}
+
 // 切换用户会话
 const switchSession = async (session) => {
-  currentChatUserId.value = session.userId
+  if (!session || !session.userId) return
+  
+  // 确保 userId 是数字
+  const userId = Number(session.userId)
+  console.log('切换到用户会话:', userId)
+  
+  currentChatUserId.value = userId
+  
+  // 如果 WebSocket 未连接，则建立连接
+  if (!stompClient || !isConnected.value) {
+    initStompConnection()
+    // 等待连接成功后再加载数据
+    await new Promise(resolve => setTimeout(resolve, 1000))
+  }
+  
   // 加载历史消息
+  await loadChatHistory(userId)
+  
+  // 标记消息为已读
   try {
-    const res = await getChatHistory(session.userId, ADMIN_ID)
-    if (res.data.code === 1 && res.data.data) {
-      messageList.value = res.data.data
-    }
-    // 打开会话自动标记消息已读
-    await markMsgRead(session.userId, ADMIN_ID)
-    // 刷新会话未读数
+    await markMsgRead(userId, adminId.value)
     await getSessionList()
   } catch (error) {
-    console.error('切换会话失败:', error)
+    console.error('标记已读失败', error)
   }
-  nextTick(() => scrollToBottom())
+}
+
+// 发送消息
+const sendMessage = async () => {
+  const content = sendContent.value.trim()
+  if (!content) {
+    ElMessage.warning('请输入消息内容')
+    return
+  }
+  
+  if (!currentChatUserId.value) {
+    ElMessage.warning('请先选择聊天用户')
+    return
+  }
+
+  // 确保 receiverId 是数字
+  const receiverId = Number(currentChatUserId.value)
+  console.log('========== 发送消息 ==========')
+  console.log('接收者用户ID:', receiverId)
+  console.log('管理员ID:', adminId.value)
+
+  const sendMsgData = {
+    receiverId: receiverId,
+    msgType: 'TEXT',
+    content: content,
+    isRead: 0
+  }
+
+  if (stompClient && stompClient.connected) {
+    stompClient.publish({
+      destination: '/app/chat.send',
+      body: JSON.stringify(sendMsgData)
+    })
+    console.log('✅ 消息已发送到 /app/chat.send')
+  } else {
+    console.error('WebSocket未连接，尝试重新连接...')
+    ElMessage.warning('连接已断开，正在重连...')
+    initStompConnection()
+    return
+  }
+
+  // 本地消息回显
+  const localMessage = {
+    id: Date.now(),
+    receiverId: receiverId,
+    senderId: adminId.value,
+    senderType: 'ADMIN',
+    msgType: 'TEXT',
+    content: content,
+    createTime: new Date().toISOString()
+  }
+  messageList.value.push(localMessage)
+
+  sendContent.value = ''
+  scrollToBottom()
 }
 
 // 图片上传
 const handleImgUpload = async (e) => {
   const file = e.target.files[0]
   if (!file) return
-  imgUrl.value = 'https://picsum.photos/300/200'
-}
-
-// 客服发送消息
-const sendMessage = () => {
-  if (!currentChatUserId.value) return
-  if (!sendContent.value && !imgUrl.value) {
-    alert('请输入文字或上传图片')
+  
+  if (!currentChatUserId.value) {
+    ElMessage.warning('请先选择聊天用户')
     return
   }
-
-  let content = sendContent.value
-  if (imgUrl.value) {
-    content += `|${imgUrl.value}`
+  
+  // 检查文件大小（限制5MB）
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.warning('图片大小不能超过5MB')
+    return
   }
-
-  const sendMsgData = {
-    receiverId: currentChatUserId.value,
-    msgType: imgUrl.value ? 'IMAGE' : 'TEXT',
-    content: content,
-    isRead: 0
-  }
-
-  console.log('客服发送消息', sendMsgData)
-  if (stompClient) {
-    stompClient.publish({
-      destination: '/app/chat.send',
-      body: JSON.stringify(sendMsgData)
+  
+  try {
+    // 1. 先上传图片到服务器
+    const formData = new FormData()
+    formData.append('file', file)
+    
+    const uploadRes = await request.post('/admin/upload/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
     })
+    
+    if (uploadRes.code === 1 && uploadRes.data) {
+      const imageUrl = uploadRes.data  // 获取图片URL
+      
+      // 2. 通过WebSocket发送图片URL
+      const sendMsgData = {
+        receiverId: Number(currentChatUserId.value),
+        msgType: 'IMAGE',
+        content: imageUrl,
+        isRead: 0
+      }
+
+      if (stompClient && stompClient.connected) {
+        stompClient.publish({
+          destination: '/app/chat.send',
+          body: JSON.stringify(sendMsgData)
+        })
+        console.log('✅ 图片消息已发送，URL:', imageUrl)
+      }
+
+      messageList.value.push({
+        id: Date.now(),
+        ...sendMsgData,
+        senderId: adminId.value,
+        senderType: 'ADMIN',
+        createTime: new Date().toISOString()
+      })
+
+      scrollToBottom()
+      ElMessage.success('图片发送成功')
+    } else {
+      ElMessage.error('图片上传失败')
+    }
+  } catch (error) {
+    console.error('图片上传失败', error)
+    ElMessage.error('图片上传失败')
   }
-
-  // 本地消息回显
-  messageList.value.push({
-    ...sendMsgData,
-    senderType: 'ADMIN',
-    createTime: new Date()
-  })
-
-  sendContent.value = ''
-  imgUrl.value = ''
-  scrollToBottom()
+  
+  e.target.value = ''
 }
 
-// 工具函数
-const splitContent = (content) => {
-  if (!content) return { text: '', imgUrl: '' }
-  const arr = content.split('|')
-  return {
-    text: arr[0],
-    imgUrl: arr.length > 1 ? arr[1] : ''
-  }
-}
-const formatTime = (time) => {
-  if (!time) return ''
-  return dayjs(time).format('YYYY-MM-DD HH:mm')
-}
-const scrollToBottom = () => {
+// 滚动到底部
+const scrollToBottom = async () => {
+  await nextTick()
   if (msgBoxRef.value) {
     msgBoxRef.value.scrollTop = msgBoxRef.value.scrollHeight
   }
 }
+
+// 时间格式化
+const formatTime = (time) => {
+  if (!time) return ''
+  return dayjs(time).format('HH:mm')
+}
+
+// 页面挂载
+onMounted(() => {
+  getSessionList()
+})
+
+// 页面卸载
+onUnmounted(() => {
+  if (reconnectTimer) {
+    clearTimeout(reconnectTimer)
+  }
+  if (stompClient) {
+    stompClient.deactivate()
+    stompClient = null
+  }
+})
 </script>
 
 <style scoped>
+/* 样式保持不变 */
 .admin-chat-container {
-  width: 100vw;
   height: 100vh;
-  background-color: #f0f2f5;
   display: flex;
   flex-direction: column;
-  margin: 0;
-  padding: 0;
+  background: #f5f7fa;
 }
+
 .chat-header {
   height: 60px;
-  background-color: #0f172a;
+  background: #1a1a2e;
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
   color: #fff;
-  line-height: 60px;
-  padding-left: 20px;
 }
+
+.chat-header h2 {
+  font-size: 18px;
+  font-weight: 500;
+}
+
 .chat-main-wrap {
   flex: 1;
   display: flex;
   overflow: hidden;
 }
 
-/* 左侧会话列表 */
 .session-left {
   width: 280px;
-  background-color: #fff;
-  border-right: 1px solid #eee;
+  background: #fff;
+  border-right: 1px solid #e8e8e8;
   display: flex;
   flex-direction: column;
 }
+
 .session-title {
   height: 50px;
-  line-height: 50px;
-  padding: 0 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  align-items: center;
+  padding: 0 15px;
 }
+
 .session-title span {
-  margin-right: 20px;
+  padding: 8px 12px;
   cursor: pointer;
+  font-size: 14px;
+  color: #666;
 }
+
 .session-title .active-tab {
-  color: #165DFF;
-  font-weight: 600;
-  border-bottom: 2px solid #165DFF;
+  color: #1890ff;
+  border-bottom: 2px solid #1890ff;
+  font-weight: 500;
 }
+
 .session-list {
   flex: 1;
   overflow-y: auto;
 }
+
 .session-item {
   display: flex;
   padding: 12px 15px;
-  border-bottom: 1px solid #f5f5f5;
   cursor: pointer;
-  gap: 12px;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s;
 }
+
+.session-item:hover {
+  background: #f5f7fa;
+}
+
 .session-item.active {
-  background-color: #eef4ff;
+  background: #e6f7ff;
 }
+
 .session-avatar {
   width: 40px;
   height: 40px;
   border-radius: 50%;
-  background-color: #d3dce6;
+  background: #1890ff;
+  margin-right: 12px;
   flex-shrink: 0;
 }
+
 .session-info {
   flex: 1;
-  overflow: hidden;
+  min-width: 0;
 }
+
 .session-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 4px;
 }
+
 .session-user-name {
-  font-weight: 600;
   font-size: 14px;
+  font-weight: 500;
   color: #333;
 }
+
 .unread-badge {
-  min-width: 18px;
-  height: 18px;
-  background-color: #ff4d4f;
+  background: #ff4d4f;
   color: #fff;
-  border-radius: 9px;
-  text-align: center;
   font-size: 12px;
-  line-height: 18px;
-  padding: 0 5px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  min-width: 18px;
+  text-align: center;
 }
+
 .session-last-msg {
   font-size: 12px;
-  color: #666;
+  color: #999;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   margin-bottom: 4px;
 }
+
 .session-time {
   font-size: 11px;
-  color: #999;
-  align-self: flex-start;
+  color: #bbb;
 }
 
-/* 中间聊天窗口 */
 .chat-middle {
   flex: 1;
   display: flex;
   flex-direction: column;
-  background-color: #f5f7fa;
+  background: #fff;
 }
+
 .chat-middle-header {
   height: 50px;
-  line-height: 50px;
+  border-bottom: 1px solid #e8e8e8;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 0 20px;
-  border-bottom: 1px solid #eee;
-  background-color: #fff;
-  font-weight: 600;
-  color: #333;
+  font-size: 16px;
+  font-weight: 500;
 }
+
+.connection-status {
+  font-size: 12px;
+  padding: 4px 12px;
+  border-radius: 12px;
+}
+
+.connection-status.connected {
+  background: #52c41a;
+  color: #fff;
+}
+
+.connection-status.disconnected {
+  background: #ff4d4f;
+  color: #fff;
+}
+
+.connection-status.connecting {
+  background: #faad14;
+  color: #fff;
+}
+
 .chat-message-box {
   flex: 1;
-  padding: 20px;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+  padding: 20px;
+  background: #f5f7fa;
 }
+
 .empty-tip {
-  flex: 1;
+  height: 100%;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #999;
   font-size: 14px;
 }
+
 .msg-item {
-  display: flex;
-  max-width: 70%;
+  margin-bottom: 20px;
 }
+
 .msg-left {
-  align-self: flex-start;
-  flex-direction: row;
-  gap: 10px;
+  display: flex;
+  align-items: flex-start;
 }
+
 .msg-right {
-  align-self: flex-end;
+  display: flex;
+  align-items: flex-start;
   flex-direction: row-reverse;
-  gap: 10px;
 }
+
 .msg-avatar {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 50%;
-  background-color: #165DFF;
+  background: #1890ff;
   flex-shrink: 0;
 }
+
+.msg-right .msg-avatar {
+  background: #52c41a;
+}
+
 .msg-content-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+  max-width: 60%;
+  margin: 0 10px;
 }
+
 .msg-text {
-  padding: 10px 14px;
-  border-radius: 12px;
-  word-break: break-all;
+  background: #fff;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.4;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
-.msg-left .msg-text {
-  background-color: #fff;
-  border: 1px solid #eee;
-}
+
 .msg-right .msg-text {
-  background-color: #165DFF;
+  background: #1890ff;
   color: #fff;
 }
+
 .msg-img img {
-  max-width: 220px;
-  border-radius: 12px;
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: 4px;
 }
+
 .msg-time {
   font-size: 11px;
-  color: #bbb;
+  color: #999;
+  margin-top: 4px;
+  text-align: center;
 }
 
-/* 底部输入栏 */
 .chat-bottom-input {
-  padding: 15px;
-  border-top: 1px solid #eee;
+  height: 120px;
+  border-top: 1px solid #e8e8e8;
+  padding: 15px 20px;
   display: flex;
-  flex-direction: column;
-  gap: 10px;
-  background-color: #fff;
+  align-items: flex-end;
+  background: #fff;
 }
+
 .input-tool {
-  display: flex;
-  gap: 10px;
+  margin-right: 10px;
 }
+
 .img-upload-btn {
-  font-size: 20px;
   cursor: pointer;
+  font-size: 20px;
+  padding: 5px;
 }
+
 .chat-bottom-input textarea {
-  height: 80px;
-  border: 1px solid #eee;
-  border-radius: 6px;
-  padding: 10px;
+  flex: 1;
+  height: 60px;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 8px 12px;
   resize: none;
+  font-size: 14px;
   outline: none;
 }
+
+.chat-bottom-input textarea:focus {
+  border-color: #1890ff;
+}
+
 .send-btn {
-  align-self: flex-end;
-  padding: 6px 20px;
-  background-color: #165DFF;
+  width: 60px;
+  height: 60px;
+  background: #1890ff;
   color: #fff;
   border: none;
   border-radius: 4px;
+  margin-left: 10px;
   cursor: pointer;
+  font-size: 14px;
 }
 
-/* 右侧用户信息面板 */
+.send-btn:hover {
+  background: #40a9ff;
+}
+
 .info-right {
-  width: 320px;
-  border-left: 1px solid #eee;
-  background-color: #fff;
+  width: 280px;
+  background: #fff;
+  border-left: 1px solid #e8e8e8;
   display: flex;
   flex-direction: column;
 }
+
 .info-tab {
   height: 50px;
-  line-height: 50px;
-  padding: 0 20px;
-  border-bottom: 1px solid #eee;
+  border-bottom: 1px solid #e8e8e8;
   display: flex;
-  gap: 30px;
+  align-items: center;
+  padding: 0 15px;
 }
+
 .info-tab span {
+  padding: 8px 12px;
   cursor: pointer;
   font-size: 14px;
   color: #666;
-  padding-bottom: 10px;
 }
+
 .info-tab .active {
-  color: #165DFF;
-  font-weight: 600;
-  border-bottom: 2px solid #165DFF;
+  color: #1890ff;
+  border-bottom: 2px solid #1890ff;
+  font-weight: 500;
 }
+
 .info-form {
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+  flex: 1;
+  padding: 20px 15px;
+  overflow-y: auto;
 }
+
 .info-item {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  margin-bottom: 15px;
 }
-.info-item .label {
-  width: 60px;
+
+.label {
+  display: block;
+  font-size: 12px;
   color: #666;
+  margin-bottom: 4px;
+}
+
+.input, .textarea {
+  width: 100%;
+  border: 1px solid #e8e8e8;
+  border-radius: 4px;
+  padding: 6px 10px;
   font-size: 14px;
-}
-.info-item .input {
-  flex: 1;
-  height: 36px;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  padding: 0 10px;
   outline: none;
 }
-.info-item .textarea {
-  flex: 1;
-  height: 100px;
-  border: 1px solid #eee;
-  border-radius: 4px;
-  padding: 10px;
+
+.input:focus, .textarea:focus {
+  border-color: #1890ff;
+}
+
+.textarea {
+  height: 60px;
   resize: none;
-  outline: none;
 }
+
 .save-btn {
-  margin-top: 10px;
-  padding: 8px 0;
-  background-color: #165DFF;
+  width: 100%;
+  height: 36px;
+  background: #1890ff;
   color: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
+  margin-top: 10px;
 }
 
-/* 滚动条样式 */
-::-webkit-scrollbar {
-  width: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+.save-btn:hover {
+  background: #40a9ff;
 }
 </style>
