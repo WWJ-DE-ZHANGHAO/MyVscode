@@ -30,11 +30,11 @@
               </el-select>
             </el-form-item>
             <el-form-item label="商品状态">
-          <el-select v-model="searchForm.status" placeholder="选择商品状态" style="width: 180px">
-            <el-option label="上架" value="1" />
-            <el-option label="下架" value="0" />
-          </el-select>
-        </el-form-item>
+              <el-select v-model="searchForm.status" placeholder="选择商品状态" style="width: 180px">
+                <el-option label="上架" value="1" />
+                <el-option label="下架" value="0" />
+              </el-select>
+            </el-form-item>
           </el-form>
         </div>
         <div class="search-actions">
@@ -192,14 +192,50 @@
             </el-upload>
           </div>
         </el-form-item>
-        <el-form-item label="书籍介绍视频URL" prop="videoUrl">
-          <el-input v-model="form.videoUrl" placeholder="请输入书籍介绍视频URL" />
-        </el-form-item>
         <el-form-item label="书籍简介" prop="description">
           <el-input v-model="form.description" type="textarea" placeholder="请输入书籍简介" />
         </el-form-item>
-        <el-form-item label="书籍详情" prop="detailContent">
-          <el-input v-model="form.detailContent" type="textarea" placeholder="请输入书籍详情" :rows="4" />
+        
+        <!-- 动态属性 -->
+        <el-form-item label="商品属性" prop="attributes">
+          <div v-for="(attribute, index) in attributesList" :key="index" class="attribute-item">
+            <el-select v-model="attribute.key" placeholder="属性名称" style="width: 150px; margin-right: 10px">
+              <el-option label="出版社" value="出版社" />
+              <el-option label="出版时间" value="出版时间" />
+              <el-option label="国际标准书号ISBN" value="国际标准书号ISBN" />
+            </el-select>
+            <el-input v-model="attribute.value" placeholder="属性值" style="flex: 1; margin-right: 10px" />
+            <el-button type="danger" size="small" @click="removeAttribute(index)">删除</el-button>
+          </div>
+          <el-button type="primary" size="small" @click="addAttribute" style="margin-top: 10px">添加属性</el-button>
+        </el-form-item>
+        
+        <!-- 商品轮播图 -->
+        <el-form-item label="商品轮播图" prop="sliderImages">
+          <div class="slider-images-container">
+            <div v-for="(image, index) in sliderImagesList" :key="index" class="slider-image-item">
+              <el-image :src="image" fit="cover" style="width: 100px; height: 100px; margin-right: 10px" />
+              <el-button type="danger" size="small" @click="removeSliderImage(index)">删除</el-button>
+            </div>
+            <el-upload
+              class="slider-upload"
+              :action="'/admin/upload/upload'"
+              :headers="uploadHeaders"
+              :show-file-list="false"
+              :on-success="handleSliderUploadSuccess"
+              :before-upload="beforeUpload"
+            >
+              <div class="upload-placeholder">
+                <el-icon class="upload-icon"><Plus /></el-icon>
+                <span>点击上传轮播图</span>
+              </div>
+            </el-upload>
+          </div>
+        </el-form-item>
+        
+        <!-- 商品描述（富文本） -->
+        <el-form-item label="商品描述" prop="detailHtml">
+          <Editor v-model="form.detailHtml" />
         </el-form-item>
         <el-form-item label="评分" prop="score">
           <el-rate v-model="form.score" :max="5" :precision="1" />
@@ -234,6 +270,7 @@ import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Search, Delete } from '@element-plus/icons-vue'
 import request from '@/utils/request'
+import Editor from '@/components/Editor.vue'
 
 const productList = ref([])
 const categoryList = ref([])
@@ -267,14 +304,25 @@ const form = reactive({
   price: null,
   stock: 0,
   coverUrl: '',
-  videoUrl: '',
+  detailHtml: '',
+  attributes: '',
+  sliderImages: '',
   description: '',
-  detailContent: '',
   salesCount: 0,
   status: 1,
   score: null,
   isSpecial: 0
 })
+
+// 动态属性列表
+const attributesList = ref([
+  { key: '出版社', value: '' },
+  { key: '出版时间', value: '' },
+  { key: '国际标准书号ISBN', value: '' }
+])
+
+// 轮播图列表
+const sliderImagesList = ref([])
 
 // 表单验证规则
 const rules = {
@@ -297,14 +345,17 @@ const rules = {
   coverUrl: [
     { required: true, message: '封面图片URL不能为空', trigger: 'blur' }
   ],
-  videoUrl: [
-    // 书籍介绍视频URL现在可以为空
+  detailHtml: [
+    { required: true, message: '书籍详情(长描述)不能为空', trigger: 'blur' }
+  ],
+  attributes: [
+    { required: true, message: '商品动态属性不能为空', trigger: 'blur' }
+  ],
+  sliderImages: [
+    { required: true, message: '商品轮播图列表不能为空', trigger: 'blur' }
   ],
   description: [
     { required: true, message: '书籍简介(短描述)不能为空', trigger: 'blur' }
-  ],
-  detailContent: [
-    // 书籍详情(富文本内容)现在可以为空
   ],
   score: [
     { required: true, message: '评分不能为空', trigger: 'blur' }
@@ -453,13 +504,25 @@ const handleAdd = () => {
   form.price = null
   form.stock = 0
   form.coverUrl = ''
-  form.videoUrl = ''
+  form.detailHtml = ''
+  form.attributes = ''
+  form.sliderImages = ''
   form.description = ''
-  form.detailContent = ''
   form.salesCount = 0
   form.status = 1 // 使用数字值
   form.score = 0
   form.isSpecial = 0 // 使用数字值
+  
+  // 重置动态属性列表
+  attributesList.value = [
+    { key: '出版社', value: '' },
+    { key: '出版时间', value: '' },
+    { key: '国际标准书号ISBN', value: '' }
+  ]
+  
+  // 重置轮播图列表
+  sliderImagesList.value = []
+  
   dialogType.value = 'add'
   console.log('设置dialogVisible为true')
   dialogVisible.value = true
@@ -489,9 +552,10 @@ const handleEdit = async (product) => {
     form.price = null
     form.stock = 0
     form.coverUrl = ''
-    form.videoUrl = ''
+    form.detailHtml = ''
+    form.attributes = ''
+    form.sliderImages = ''
     form.description = ''
-    form.detailContent = ''
     form.salesCount = 0
     form.status = 1
     form.score = 0
@@ -505,15 +569,50 @@ const handleEdit = async (product) => {
     form.price = productData.price || null
     form.stock = productData.stock || 0
     form.coverUrl = productData.coverUrl || ''
-    form.videoUrl = productData.videoUrl || ''
+    form.detailHtml = productData.detailHtml || ''
+    form.attributes = productData.attributes || ''
+    form.sliderImages = productData.sliderImages || ''
     form.description = productData.description || ''
-    form.detailContent = productData.detailContent || ''
     form.salesCount = productData.salesCount || 0
     // 直接使用后端返回的数字值，不需要转换
     form.status = productData.status || 1
     form.score = productData.score || 0
     // 直接使用后端返回的数字值，不需要转换
     form.isSpecial = productData.isSpecial || 0
+    
+    // 处理动态属性
+    if (productData.attributes) {
+      try {
+        const attributes = JSON.parse(productData.attributes)
+        attributesList.value = attributes
+      } catch (error) {
+        console.error('解析动态属性失败:', error)
+        attributesList.value = [
+          { key: '出版社', value: '' },
+          { key: '出版时间', value: '' },
+          { key: '国际标准书号ISBN', value: '' }
+        ]
+      }
+    } else {
+      attributesList.value = [
+        { key: '出版社', value: '' },
+        { key: '出版时间', value: '' },
+        { key: '国际标准书号ISBN', value: '' }
+      ]
+    }
+    
+    // 处理轮播图
+    if (productData.sliderImages) {
+      try {
+        const sliderImages = JSON.parse(productData.sliderImages)
+        sliderImagesList.value = sliderImages
+      } catch (error) {
+        console.error('解析轮播图失败:', error)
+        sliderImagesList.value = []
+      }
+    } else {
+      sliderImagesList.value = []
+    }
     
     dialogType.value = 'edit'
     console.log('设置dialogVisible为true')
@@ -531,6 +630,10 @@ const handleEdit = async (product) => {
 const handleSubmit = async () => {
   if (!formRef.value) return
   try {
+    // 更新动态属性和轮播图为JSON字符串
+    form.attributes = JSON.stringify(attributesList.value)
+    form.sliderImages = JSON.stringify(sliderImagesList.value)
+    
     await formRef.value.validate()
     
     // 额外检查库存和售价不能小于0
@@ -601,6 +704,31 @@ const handleCoverUploadSuccess = (response) => {
   } else {
     ElMessage.error('封面图片上传失败')
   }
+}
+
+// 处理轮播图上传成功
+const handleSliderUploadSuccess = (response) => {
+  if (response && response.code === 1 && response.data) {
+    sliderImagesList.value.push(response.data)
+    ElMessage.success('轮播图上传成功')
+  } else {
+    ElMessage.error('轮播图上传失败')
+  }
+}
+
+// 添加动态属性
+const addAttribute = () => {
+  attributesList.value.push({ key: '', value: '' })
+}
+
+// 删除动态属性
+const removeAttribute = (index) => {
+  attributesList.value.splice(index, 1)
+}
+
+// 删除轮播图
+const removeSliderImage = (index) => {
+  sliderImagesList.value.splice(index, 1)
 }
 
 // 上传前验证
@@ -843,4 +971,32 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 500;
 }
+
+/* 动态属性样式 */
+.attribute-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+/* 轮播图样式 */
+.slider-images-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.slider-image-item {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.slider-upload {
+  margin-top: 10px;
+}
+
+
 </style>

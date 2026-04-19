@@ -75,11 +75,17 @@ const clearAll = async () => {
 
 // 全局挂载WebSocket
 onMounted(() => {
-  try {
-    connectWebSocket()
-  } catch (error) {
-    console.error('WebSocket连接失败:', error)
-    // 连接失败不影响页面渲染
+  // 只有在非客服中心页面才自动连接WebSocket
+  const currentRoute = router.currentRoute.value
+  if (currentRoute.path !== '/customer-service') {
+    try {
+      connectWebSocket()
+    } catch (error) {
+      console.error('WebSocket连接失败:', error)
+      // 连接失败不影响页面渲染
+    }
+  } else {
+    console.log('客服中心页面，跳过WebSocket连接')
   }
 })
 

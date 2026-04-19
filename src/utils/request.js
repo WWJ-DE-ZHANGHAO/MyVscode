@@ -38,20 +38,10 @@ request.interceptors.response.use(
     
     // 检查响应是否是JSON格式
     if (response.headers['content-type'] && response.headers['content-type'].includes('application/json')) {
-      // 后端使用code=1表示成功，code=0表示失败
-      if (response.data && response.data.code === 1) {
-        // 成功，直接返回response.data，这样其他页面就不需要再写response.data了
-        console.log('响应拦截器 - 成功，返回数据')
-        return response.data
-      } else {
-        // 业务逻辑失败，显示错误信息
-        const errorMsg = response.data.msg || '请求失败'
-        console.log('响应拦截器 - 业务失败:', errorMsg)
-        // 创建一个新的Error对象，保留原始响应数据
-        const error = new Error(errorMsg)
-        error.response = response
-        return Promise.reject(error)
-      }
+      // 直接返回response.data，让前端代码自己处理code字段
+      // 这样可以避免因为不同接口的code含义不同而导致的问题
+      console.log('响应拦截器 - 返回数据')
+      return response.data
     } else {
       // 响应不是JSON格式，可能是HTML页面（比如登录页）
       console.log('响应拦截器 - 非JSON响应，可能是HTML页面')

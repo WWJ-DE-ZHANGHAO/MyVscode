@@ -82,6 +82,34 @@
         <el-icon><User /></el-icon>
         <span>用户管理</span>
       </el-menu-item>
+
+      <el-sub-menu index="marketing-group">
+        <template #title>
+          <el-icon><Present /></el-icon>
+          <span>营销中心</span>
+        </template>
+        <el-menu-item index="/marketing/member">
+          <el-icon><UserFilled /></el-icon>
+          <span>会员权益管理</span>
+        </el-menu-item>
+        <el-menu-item index="/marketing/coupon-template">
+          <el-icon><Tickets /></el-icon>
+          <span>优惠券模版管理</span>
+        </el-menu-item>
+        <el-menu-item index="/marketing/point-log">
+          <el-icon><DataAnalysis /></el-icon>
+          <span>积分日志</span>
+        </el-menu-item>
+        <el-menu-item index="/marketing/coupon-log">
+          <el-icon><Document /></el-icon>
+          <span>优惠券日志</span>
+        </el-menu-item>
+      </el-sub-menu>
+
+      <el-menu-item index="/customer-service">
+        <el-icon><Message /></el-icon>
+        <span>客服中心</span>
+      </el-menu-item>
     </el-menu>
     </aside>
 
@@ -126,7 +154,10 @@ import {
   SetUp,
   Files,
   Setting,
-  User
+  User,
+  Present,
+  UserFilled,
+  Message
 } from '@element-plus/icons-vue'
 
 const router = useRouter()

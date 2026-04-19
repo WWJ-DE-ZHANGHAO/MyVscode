@@ -116,11 +116,7 @@ const dialogTitle = ref('')
 const ruleForm = reactive({
   id: null,
   shippingTemplateId: null,
-  region: {
-    provinceName: '',
-    cityName: '',
-    districtName: ''
-  },
+  region: '',
   freight: 0
 })
 
@@ -133,35 +129,18 @@ const provinceOptions = ref([])
 // 级联选择器配置
 const cascaderProps = {
   value: 'code',
-  label: 'name',
-  children: 'children'
+  label: 'name'
 }
 
 // 初始化地区数据
 const initRegionData = () => {
-  // 构建省份选项
+  // 构建省份选项，只包含省份级别，不包含城市和区县
   const provinces = regionData['86']
   if (provinces) {
-    provinceOptions.value = Object.entries(provinces).map(([code, name]) => {
-      const cities = regionData[code]
-      const cityOptions = cities ? Object.entries(cities).map(([cityCode, cityName]) => {
-        const districts = regionData[cityCode]
-        const districtOptions = districts ? Object.entries(districts).map(([districtCode, districtName]) => ({
-          code: districtCode,
-          name: districtName
-        })) : []
-        return {
-          code: cityCode,
-          name: cityName,
-          children: districtOptions
-        }
-      }) : []
-      return {
-        code: code,
-        name: name,
-        children: cityOptions
-      }
-    })
+    provinceOptions.value = Object.entries(provinces).map(([code, name]) => ({
+      code: code,
+      name: name
+    }))
   }
 }
 
@@ -174,45 +153,31 @@ const formatDate = (date) => {
 
 // 格式化地区
 const formatRegion = (region) => {
-  if (!region || typeof region !== 'object') return ''
-  // 同时支持新旧格式
-  const province = region.provinceName || region.province || ''
-  const city = region.cityName || region.city || ''
-  const district = region.districtName || region.district || ''
-  return `${province}${city}${district}`
+  if (!region) return ''
+  // 处理字符串类型的 region
+  if (typeof region === 'string') {
+    return region
+  }
+  // 兼容旧的对象格式
+  if (typeof region === 'object') {
+    const province = region.provinceName || region.province || ''
+    const city = region.cityName || region.city || ''
+    const district = region.districtName || region.district || ''
+    return `${province}${city}${district}`
+  }
+  return ''
 }
 
 // 地区选择变化
 const handleRegionChange = (value) => {
-  if (value && value.length === 3) {
-    const [provinceCode, cityCode, districtCode] = value
+  if (value && value.length === 1) {
+    const [provinceCode] = value
     
     // 从省份选项中查找名称
     const provinceOption = provinceOptions.value.find(option => option.code === provinceCode)
     const provinceName = provinceOption ? provinceOption.name : ''
     
-    // 从城市选项中查找名称
-    let cityName = ''
-    if (provinceOption) {
-      const cityOption = provinceOption.children.find(option => option.code === cityCode)
-      cityName = cityOption ? cityOption.name : ''
-    }
-    
-    // 从区县选项中查找名称
-    let districtName = ''
-    if (provinceOption) {
-      const cityOption = provinceOption.children.find(option => option.code === cityCode)
-      if (cityOption) {
-        const districtOption = cityOption.children.find(option => option.code === districtCode)
-        districtName = districtOption ? districtOption.name : ''
-      }
-    }
-    
-    ruleForm.region = {
-      provinceName: provinceName,
-      cityName: cityName,
-      districtName: districtName
-    }
+    ruleForm.region = provinceName
     console.log('地区选择变化:', ruleForm.region)
   }
 }
@@ -251,11 +216,7 @@ const handleAdd = () => {
   dialogTitle.value = '新增运费规则'
   ruleForm.id = null
   ruleForm.shippingTemplateId = null
-  ruleForm.region = {
-    provinceName: '',
-    cityName: '',
-    districtName: ''
-  }
+  ruleForm.region = ''
   ruleForm.freight = 0
   regionValue.value = []
   dialogVisible.value = true
@@ -271,40 +232,20 @@ const handleEdit = async (rule) => {
       dialogTitle.value = '编辑运费规则'
       ruleForm.id = res.data.id
       ruleForm.shippingTemplateId = res.data.shippingTemplateId
-      ruleForm.region = res.data.region || {
-        provinceName: '',
-        cityName: '',
-        districtName: ''
-      }
+      ruleForm.region = res.data.region || ''
       ruleForm.freight = res.data.freight || 0
       console.log('运费规则详情数据:', res.data)
       
       // 初始化地区选择值
-      const { provinceName, cityName, districtName } = ruleForm.region
+      const provinceName = ruleForm.region
       regionValue.value = []
       
-      // 查找对应的代码
+      // 查找对应的代码，只查找省份级别
       if (provinceName) {
         const provinceEntry = Object.entries(regionData['86']).find(([code, name]) => name === provinceName)
         if (provinceEntry) {
           const provinceCode = provinceEntry[0]
           regionValue.value.push(provinceCode)
-          
-          if (cityName) {
-            const cityEntry = Object.entries(regionData[provinceCode] || {}).find(([code, name]) => name === cityName)
-            if (cityEntry) {
-              const cityCode = cityEntry[0]
-              regionValue.value.push(cityCode)
-              
-              if (districtName) {
-                const districtEntry = Object.entries(regionData[cityCode] || {}).find(([code, name]) => name === districtName)
-                if (districtEntry) {
-                  const districtCode = districtEntry[0]
-                  regionValue.value.push(districtCode)
-                }
-              }
-            }
-          }
         }
       }
       
@@ -323,7 +264,7 @@ const handleSubmit = async () => {
     return
   }
   
-  if (!ruleForm.region.provinceName) {
+  if (!ruleForm.region) {
     ElMessage.warning('请选择地区')
     return
   }

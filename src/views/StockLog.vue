@@ -50,11 +50,6 @@
             {{ formatDate(scope.row.createTime) }}
           </template>
         </el-table-column>
-        <el-table-column label="更新时间" width="180">
-          <template #default="scope">
-            {{ formatDate(scope.row.updateTime) }}
-          </template>
-        </el-table-column>
         <el-table-column label="操作" width="100" fixed="right">
           <template #default="scope">
             <el-button size="small" type="danger" @click="handleDelete(scope.row.id)">

@@ -17,6 +17,11 @@ import ShippingRule from '@/views/ShippingRule.vue'  // 运费规则页面
 import UserManager from '@/views/UserManager.vue'  // 用户管理页面
 import Topic from '@/views/Topic.vue'  // 专题管理页面
 import Dashboard from '@/views/Dashboard.vue'  // 数据统计首页
+import MemberLevel from '@/views/MemberLevel.vue'  // 会员权益管理页面
+import CouponTemplate from '@/views/CouponTemplate.vue'  // 优惠券模板管理页面
+import PointLog from '@/views/PointLog.vue'  // 积分日志页面
+import CouponLog from '@/views/CouponLog.vue'  // 优惠券日志页面
+import CustomerService from '@/views/CustomerService.vue'  // 客服中心页面
 
 // 暂时还没写的页面，用简单占位
 import Placeholder from '@/views/Placeholder.vue'
@@ -125,8 +130,32 @@ const routes = [
   {
     path: '/marketing/member',
     name: 'MemberSystem',
-    component: Placeholder,
-    meta: { title: '会员体系', requiresAuth: true }
+    component: MemberLevel,
+    meta: { title: '会员权益管理', requiresAuth: true }
+  },
+  {
+    path: '/marketing/coupon-template',
+    name: 'CouponTemplate',
+    component: CouponTemplate,
+    meta: { title: '优惠券模版管理', requiresAuth: true }
+  },
+  {
+    path: '/marketing/point-log',
+    name: 'PointLog',
+    component: PointLog,
+    meta: { title: '积分日志', requiresAuth: true }
+  },
+  {
+    path: '/marketing/coupon-log',
+    name: 'CouponLog',
+    component: CouponLog,
+    meta: { title: '优惠券日志', requiresAuth: true }
+  },
+  {
+    path: '/customer-service',
+    name: 'CustomerService',
+    component: CustomerService,
+    meta: { title: '客服中心', requiresAuth: true }
   },
   {
     path: '/marketing/points',
