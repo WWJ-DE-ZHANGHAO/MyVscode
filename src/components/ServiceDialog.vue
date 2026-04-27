@@ -30,6 +30,38 @@
           <div v-if="msg.msgType === 'IMAGE'" class="msg-img">
             <img :src="msg.content" alt="图片" />
           </div>
+          <div v-if="msg.msgType === 'ORDER'" class="msg-order">
+            <div class="order-card">
+              <div class="order-card-header">
+                <span class="order-card-title">订单信息</span>
+                <span class="order-card-status" :class="'status-' + msg.content.orderStatus">
+                  {{ getOrderStatusText(msg.content.orderStatus) }}
+                </span>
+              </div>
+              <div class="order-card-body">
+                <div class="order-card-row">
+                  <span class="label">订单号：</span>
+                  <span class="value">{{ msg.content.id }}</span>
+                </div>
+                <div class="order-card-row">
+                  <span class="label">下单时间：</span>
+                  <span class="value">{{ msg.content.orderTime }}</span>
+                </div>
+                <div class="order-card-row">
+                  <span class="label">订单金额：</span>
+                  <span class="value price">¥{{ msg.content.actualPay.toFixed(2) }}</span>
+                </div>
+                <div class="order-card-row">
+                  <span class="label">收货人：</span>
+                  <span class="value">{{ msg.content.consigneeName }}</span>
+                </div>
+                <div class="order-card-row">
+                  <span class="label">联系电话：</span>
+                  <span class="value">{{ maskPhone(msg.content.phone) }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
           <div class="msg-time">
             {{ msg.time }}
             <span v-if="msg.senderType === 'USER'" class="msg-status">
@@ -41,44 +73,94 @@
       </div>
     </div>
     
-    <div class="emoji-panel" v-show="showEmoji">
-      <div class="emoji-grid">
-        <span 
-          v-for="(emoji, index) in emojis" 
-          :key="index"
-          class="emoji-item"
-          @click="insertEmoji(emoji)"
-        >
-          {{ emoji }}
-        </span>
+    <div class="chat-bottom">
+      <div class="emoji-panel" v-show="showEmoji">
+        <div class="emoji-grid">
+          <span 
+            v-for="(emoji, index) in emojis" 
+            :key="index"
+            class="emoji-item"
+            @click="insertEmoji(emoji)"
+          >
+            {{ emoji }}
+          </span>
+        </div>
+      </div>
+      
+      <div class="chat-bottom-input">
+        <div class="input-tool">
+          <span class="img-upload-btn" @click="showEmoji = !showEmoji">😊</span>
+          <label class="img-upload-btn" for="file-input">🖼️</label>
+          <input 
+            type="file" 
+            id="file-input" 
+            accept="image/*" 
+            style="display: none" 
+            @change="handleImageUpload"
+          />
+          <span class="img-upload-btn" @click="showOrderDialog = true">📦</span>
+        </div>
+        <textarea 
+          v-model="inputMessage" 
+          placeholder="请输入消息..." 
+          @keyup.enter.prevent="sendMessage"
+        ></textarea>
+        <button class="send-btn" @click="sendMessage" :disabled="!inputMessage.trim()">发送</button>
       </div>
     </div>
     
-    <div class="chat-bottom-input">
-      <div class="input-tool">
-        <span class="img-upload-btn" @click="showEmoji = !showEmoji">😊</span>
-        <label class="img-upload-btn" for="file-input">🖼️</label>
-        <input 
-          type="file" 
-          id="file-input" 
-          accept="image/*" 
-          style="display: none" 
-          @change="handleImageUpload"
-        />
+    <!-- 订单选择侧边面板 -->
+    <div class="order-panel-mask" v-show="showOrderDialog" @click="showOrderDialog = false">
+      <div class="order-panel" @click.stop>
+        <div class="order-panel-header">
+          <span class="panel-title">订单问题</span>
+          <el-icon class="close-icon" @click="showOrderDialog = false"><Close /></el-icon>
+        </div>
+        <div class="order-panel-tip">
+          <span class="tip-icon">🐵</span>
+          <div class="tip-content">
+            <div class="tip-title">带着订单咨询，问题解决快人一步</div>
+            <div class="tip-desc">预计可为您节省 30秒 咨询时间</div>
+          </div>
+        </div>
+        <div class="order-panel-list" v-loading="orderLoading">
+          <div 
+            v-for="order in filteredOrders" 
+            :key="order.id"
+            class="order-panel-item"
+          >
+            <div class="order-panel-item-header">
+              <span class="order-id">订单号：{{ order.id.slice(-6) }}</span>
+              <span class="order-status" :class="'status-' + order.orderStatus">
+                {{ getOrderStatusText(order.orderStatus) }}
+              </span>
+            </div>
+            <div class="order-panel-item-body">
+              <div class="order-panel-row">
+                <span class="time">{{ order.orderTime }}</span>
+                <span class="divider">|</span>
+                <span class="price">¥{{ order.actualPay.toFixed(2) }}</span>
+              </div>
+              <div class="order-panel-row">
+                <span>收货人：{{ order.consigneeName }} {{ maskPhone(order.phone) }}</span>
+              </div>
+            </div>
+            <div class="order-panel-item-footer">
+              <button class="send-order-btn" @click="sendOrderDirectly(order)">发送</button>
+            </div>
+          </div>
+          <div v-if="filteredOrders.length === 0 && !orderLoading" class="empty-order">
+            暂无可发送的订单
+          </div>
+        </div>
       </div>
-      <textarea 
-        v-model="inputMessage" 
-        placeholder="请输入消息..." 
-        @keyup.enter.prevent="sendMessage"
-      ></textarea>
-      <button class="send-btn" @click="sendMessage" :disabled="!inputMessage.trim()">发送</button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick, watch, onUnmounted } from 'vue';
-import { Close, ChatRound } from '@element-plus/icons-vue';
+import { ref, nextTick, watch, onUnmounted, computed } from 'vue';
+import { Close, ChatRound, Search } from '@element-plus/icons-vue';
 import { Client } from '@stomp/stompjs';
 import SockJS from 'sockjs-client';
 import { ElMessage } from 'element-plus';
@@ -111,14 +193,135 @@ const messages = ref([
 ]);
 
 const emojis = [
-  '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
+  '😀', '😃', '', '😁', '', '😅', '', '🤣',
   '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
-  '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜',
-  '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏'
+  '😘', '', '😙', '', '😋', '', '😝', '',
+  '🤪', '🤨', '', '🤓', '😎', '🤩', '🥳', ''
 ];
 
 // 客服ID
 const ADMIN_ID = 2;
+
+// 订单相关
+const showOrderDialog = ref(false);
+const orderLoading = ref(false);
+const orders = ref([]);
+const selectedOrderId = ref(null);
+
+// 过滤订单：只展示状态为 1、2、3、4 的订单
+const filteredOrders = computed(() => {
+  return orders.value.filter(order => [1, 2, 3, 4].includes(order.orderStatus));
+});
+
+// 获取订单状态文本
+const getOrderStatusText = (status) => {
+  const statusMap = {
+    1: '待付款',
+    2: '待发货',
+    3: '待收货',
+    4: '已收货',
+    5: '售后中',
+    6: '已取消'
+  };
+  return statusMap[status] || '未知';
+};
+
+// 手机号脱敏
+const maskPhone = (phone) => {
+  if (!phone || phone.length < 11) return phone;
+  return phone.substring(0, 3) + '****' + phone.substring(7);
+};
+
+// 获取订单列表
+const fetchOrders = async () => {
+  const token = getToken();
+  if (!token) {
+    ElMessage.error('请先登录');
+    return;
+  }
+  
+  orderLoading.value = true;
+  try {
+    const response = await fetch('http://localhost:8080/user/order/historyOrders', {
+      method: 'GET',
+      headers: {
+        'token': token,
+        'authentication': token,
+        'Authorization': token
+      }
+    });
+    
+    const result = await response.json();
+    
+    if (result.code === 1) {
+      orders.value = result.data || [];
+    } else {
+      ElMessage.error(result.msg || '获取订单列表失败');
+    }
+  } catch (error) {
+    console.error('获取订单列表失败', error);
+    ElMessage.error('获取订单列表失败');
+  } finally {
+    orderLoading.value = false;
+  }
+};
+
+// 发送订单消息
+const sendOrder = () => {
+  if (!selectedOrderId.value) {
+    ElMessage.warning('请选择一个订单');
+    return;
+  }
+  
+  const selectedOrder = orders.value.find(order => order.id === selectedOrderId.value);
+  if (!selectedOrder) {
+    ElMessage.error('订单不存在');
+    return;
+  }
+  
+  sendOrderDirectly(selectedOrder);
+};
+
+// 直接发送订单（点击发送按钮）
+const sendOrderDirectly = (order) => {
+  // 本地显示订单消息
+  messages.value.push({
+    id: Date.now(),
+    content: order,
+    time: new Date().toLocaleTimeString(),
+    senderType: 'USER',
+    msgType: 'ORDER'
+  });
+  scrollToBottom();
+  
+  // 通过WebSocket发送订单消息
+  const sendMsgData = {
+    receiverId: ADMIN_ID,
+    msgType: 'ORDER',
+    content: JSON.stringify(order)
+  };
+  
+  if (stompClient && stompClient.connected) {
+    stompClient.publish({
+      destination: '/app/chat.send',
+      body: JSON.stringify(sendMsgData)
+    });
+    console.log('✅ 订单消息已发送', order);
+  } else {
+    console.error('WebSocket 未连接');
+    ElMessage.warning('连接已断开，订单已本地显示');
+  }
+  
+  showOrderDialog.value = false;
+  selectedOrderId.value = null;
+};
+
+// 监听订单弹窗打开，加载订单列表
+watch(showOrderDialog, (newVal) => {
+  if (newVal) {
+    fetchOrders();
+  }
+});
 
 // 获取 token 的函数
 const getToken = () => {
@@ -467,7 +670,6 @@ onUnmounted(() => {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   z-index: 1000;
 }
 
@@ -665,28 +867,36 @@ onUnmounted(() => {
   cursor: not-allowed;
 }
 
+.chat-bottom {
+  position: relative;
+}
+
 .emoji-panel {
   position: absolute;
-  bottom: 100%;
+  top: 100%;
   left: 0;
   right: 0;
   padding: 12px;
   background-color: #fff;
-  border-top: 1px solid #eee;
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
-  border-radius: 12px 12px 0 0;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  margin-top: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 100;
 }
 
 .emoji-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(8, 1fr);
   gap: 8px;
 }
 
 .emoji-item {
-  font-size: 20px;
+  font-size: 24px;
   cursor: pointer;
-  padding: 6px;
+  padding: 8px;
   border-radius: 4px;
   transition: background-color 0.2s;
   text-align: center;
@@ -694,6 +904,277 @@ onUnmounted(() => {
 
 .emoji-item:hover {
   background-color: #f0f0f0;
+}
+
+/* 订单侧边面板样式 */
+.order-panel-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.3);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.order-panel {
+  width: 380px;
+  max-height: 500px;
+  background-color: #fff;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.order-panel-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.panel-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #165DFF;
+}
+
+.order-panel .close-icon {
+  font-size: 20px;
+  color: #999;
+  cursor: pointer;
+}
+
+.order-panel .close-icon:hover {
+  color: #333;
+}
+
+.order-panel-tip {
+  padding: 12px 20px;
+  background-color: #e6f7ff;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tip-icon {
+  font-size: 24px;
+}
+
+.tip-content {
+  flex: 1;
+}
+
+.tip-title {
+  font-size: 13px;
+  color: #165DFF;
+  font-weight: 500;
+}
+
+.tip-desc {
+  font-size: 11px;
+  color: #999;
+  margin-top: 2px;
+}
+
+.order-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.order-panel-item {
+  padding: 12px;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  transition: border-color 0.2s;
+}
+
+.order-panel-item:hover {
+  border-color: #165DFF;
+}
+
+.order-panel-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.order-id {
+  font-size: 13px;
+  color: #333;
+  font-weight: 500;
+}
+
+.order-panel-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.order-panel-row {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #666;
+}
+
+.order-panel-row .time {
+  color: #999;
+}
+
+.order-panel-row .divider {
+  margin: 0 8px;
+  color: #ddd;
+}
+
+.order-panel-row .price {
+  color: #ff4d4f;
+  font-weight: 600;
+}
+
+.order-panel-item-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.send-order-btn {
+  padding: 6px 20px;
+  background-color: #165DFF;
+  color: #fff;
+  border: none;
+  border-radius: 16px;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background-color 0.2s;
+}
+
+.send-order-btn:hover {
+  background-color: #4080ff;
+}
+
+.empty-order {
+  text-align: center;
+  padding: 40px 0;
+  color: #999;
+  font-size: 14px;
+}
+
+/* 订单消息卡片样式 */
+.msg-order {
+  max-width: 280px;
+}
+
+.order-card {
+  background-color: #fff;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.order-card-header {
+  padding: 10px 12px;
+  background-color: #f5f5f5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid #eee;
+}
+
+.order-card-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+}
+
+.order-card-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.order-card-status.status-1 {
+  background-color: #fff7e6;
+  color: #fa8c16;
+}
+
+.order-card-status.status-2 {
+  background-color: #e6f7ff;
+  color: #1890ff;
+}
+
+.order-card-status.status-3 {
+  background-color: #f6ffed;
+  color: #52c41a;
+}
+
+.order-card-status.status-4 {
+  background-color: #f0f0f0;
+  color: #666;
+}
+
+.order-card-body {
+  padding: 12px;
+}
+
+.order-card-row {
+  display: flex;
+  font-size: 12px;
+  margin-bottom: 6px;
+}
+
+.order-card-row:last-child {
+  margin-bottom: 0;
+}
+
+.order-card-row .label {
+  color: #999;
+  min-width: 70px;
+}
+
+.order-card-row .value {
+  color: #333;
+}
+
+.order-card-row .price {
+  color: #ff4d4f;
+  font-weight: 600;
+}
+
+/* 订单状态样式 */
+.order-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.order-status.status-1 {
+  background-color: #fff7e6;
+  color: #fa8c16;
+}
+
+.order-status.status-2 {
+  background-color: #e6f7ff;
+  color: #1890ff;
+}
+
+.order-status.status-3 {
+  background-color: #f6ffed;
+  color: #52c41a;
+}
+
+.order-status.status-4 {
+  background-color: #f0f0f0;
+  color: #666;
 }
 
 @media (max-width: 768px) {
