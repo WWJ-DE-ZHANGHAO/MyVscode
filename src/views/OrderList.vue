@@ -111,6 +111,34 @@
       />
     </div>
     
+    <!-- 发货对话框 -->
+    <el-dialog
+      v-model="deliveryDialogVisible"
+      title="订单发货"
+      width="400px"
+      :append-to-body="true"
+    >
+      <el-form :model="deliveryForm" label-width="100px">
+        <el-form-item label="订单号">
+          <el-input v-model="deliveryForm.orderId" disabled />
+        </el-form-item>
+        <el-form-item label="运输模板">
+          <el-select v-model="deliveryForm.shippingTemplateId" placeholder="请选择运输模板" style="width: 100%">
+            <el-option
+              v-for="template in shippingTemplateList"
+              :key="template.id"
+              :label="template.name"
+              :value="template.id"
+            />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="deliveryDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="confirmDelivery">确定</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 订单详情对话框 -->
     <el-dialog
       v-model="dialogVisible"
@@ -216,6 +244,14 @@ const orderList = ref([])
 // 订单详情
 const orderDetail = ref(null)
 const dialogVisible = ref(false)
+
+// 发货相关
+const deliveryDialogVisible = ref(false)
+const shippingTemplateList = ref([])
+const deliveryForm = reactive({
+  orderId: '',
+  shippingTemplateId: null
+})
 
 // 格式化日期
 const formatDate = (date) => {
@@ -346,15 +382,47 @@ const handleDetail = async (id) => {
   }
 }
 
-// 订单发货
+// 订单发货 - 打开发货对话框
 const handleDelivery = async (id) => {
   try {
-    await request.put(`/admin/order/delivery/${id}`)
+    // 获取运输模板列表
+    const res = await request.get('/admin/shipping-template/list')
+    if (res && res.data) {
+      shippingTemplateList.value = res.data
+      
+      // 设置当前订单号
+      deliveryForm.orderId = id
+      deliveryForm.shippingTemplateId = null
+      
+      // 打开发货对话框
+      deliveryDialogVisible.value = true
+    }
+  } catch (error) {
+    console.error('获取运输模板列表错误:', error)
+    ElMessage.error('获取运输模板列表失败')
+  }
+}
+
+// 确认发货
+const confirmDelivery = async () => {
+  if (!deliveryForm.shippingTemplateId) {
+    ElMessage.warning('请选择运输模板')
+    return
+  }
+  
+  try {
+    await request.put('/admin/order/delivery', null, {
+      params: {
+        OrderId: deliveryForm.orderId,
+        ShippingTemplateId: deliveryForm.shippingTemplateId
+      }
+    })
     ElMessage.success('发货成功')
+    deliveryDialogVisible.value = false
     getOrderList()
   } catch (error) {
     console.error('发货错误:', error)
-    ElMessage.error('发货失败')
+    ElMessage.error(error.response?.data?.msg || '发货失败')
   }
 }
 
@@ -405,6 +473,12 @@ const calculateTotal = () => {
 
 // 初始化
 onMounted(() => {
+  // 检查是否有从客服中心跳转过来的订单搜索ID
+  const searchOrderId = sessionStorage.getItem('orderSearchId')
+  if (searchOrderId) {
+    searchForm.id = searchOrderId
+    sessionStorage.removeItem('orderSearchId')
+  }
   getOrderList()
 })
 </script>

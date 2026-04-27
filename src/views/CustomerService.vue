@@ -56,6 +56,45 @@
                 <div v-if="msg.msgType === 'IMAGE'" class="msg-img">
                   <img :src="msg.content" alt="图片消息" />
                 </div>
+                <div v-if="msg.msgType === 'ORDER'" class="msg-order-card">
+                  <div class="order-card-header">
+                    <span class="order-card-icon">📦</span>
+                    <span class="order-card-title">订单卡片</span>
+                  </div>
+                  <div class="order-card-body">
+                    <div class="order-row">
+                      <span class="order-label">订单号：</span>
+                      <span class="order-value">{{ parseOrderContent(msg.content).id }}</span>
+                    </div>
+                    <div class="order-row">
+                      <span class="order-label">下单时间：</span>
+                      <span class="order-value">{{ parseOrderContent(msg.content).orderTime }}</span>
+                    </div>
+                    <div class="order-row">
+                      <span class="order-label">订单金额：</span>
+                      <span class="order-value order-amount">¥{{ parseOrderContent(msg.content).actualPay }}</span>
+                    </div>
+                    <div class="order-row">
+                      <span class="order-label">订单状态：</span>
+                      <span class="order-value" :class="'order-status-' + parseOrderContent(msg.content).orderStatus">
+                        {{ getOrderStatusText(parseOrderContent(msg.content).orderStatus) }}
+                      </span>
+                    </div>
+                    <div class="order-row">
+                      <span class="order-label">收货人：</span>
+                      <span class="order-value">{{ parseOrderContent(msg.content).consigneeName }}</span>
+                    </div>
+                    <div class="order-row">
+                      <span class="order-label">联系电话：</span>
+                      <span class="order-value">{{ maskPhone(parseOrderContent(msg.content).phone) }}</span>
+                    </div>
+                  </div>
+                  <div class="order-card-footer">
+                    <button class="order-detail-btn" @click="viewOrderDetail(parseOrderContent(msg.content).id)">
+                      查看订单详情
+                    </button>
+                  </div>
+                </div>
                 <div class="msg-time">{{ formatTime(msg.createTime) }}</div>
               </div>
             </div>
@@ -503,6 +542,41 @@ const formatTime = (time) => {
   return dayjs(time).format('HH:mm')
 }
 
+// 解析订单消息内容
+const parseOrderContent = (content) => {
+  try {
+    return JSON.parse(content)
+  } catch (e) {
+    return {}
+  }
+}
+
+// 订单状态文本映射
+const getOrderStatusText = (status) => {
+  const statusMap = {
+    1: '待付款',
+    2: '待发货',
+    3: '待收货',
+    4: '已收货',
+    5: '售后中',
+    6: '已取消'
+  }
+  return statusMap[status] || '未知状态'
+}
+
+// 手机号脱敏（中间4位）
+const maskPhone = (phone) => {
+  if (!phone || phone.length < 11) return phone || ''
+  return phone.substring(0, 3) + '****' + phone.substring(7)
+}
+
+// 查看订单详情 - 跳转到订单管理页面并搜索
+const viewOrderDetail = (orderId) => {
+  // 将订单号存入 sessionStorage，订单管理页面加载时读取并搜索
+  sessionStorage.setItem('orderSearchId', orderId)
+  window.location.href = '/order'
+}
+
 // 页面挂载
 onMounted(() => {
   getSessionList()
@@ -755,6 +829,112 @@ onUnmounted(() => {
   max-width: 200px;
   max-height: 200px;
   border-radius: 4px;
+}
+
+.msg-order-card {
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+  overflow: hidden;
+  min-width: 280px;
+  max-width: 320px;
+}
+
+.order-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 12px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.order-card-icon {
+  font-size: 16px;
+}
+
+.order-card-body {
+  padding: 12px;
+}
+
+.order-row {
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.order-label {
+  color: #999;
+  white-space: nowrap;
+  min-width: 68px;
+}
+
+.order-value {
+  color: #333;
+  word-break: break-all;
+}
+
+.order-amount {
+  color: #f56c6c;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.order-status-1 {
+  color: #e6a23c;
+  font-weight: 500;
+}
+
+.order-status-2 {
+  color: #409eff;
+  font-weight: 500;
+}
+
+.order-status-3 {
+  color: #67c23a;
+  font-weight: 500;
+}
+
+.order-status-4 {
+  color: #909399;
+  font-weight: 500;
+}
+
+.order-status-5 {
+  color: #f56c6c;
+  font-weight: 500;
+}
+
+.order-status-6 {
+  color: #909399;
+  font-weight: 500;
+  text-decoration: line-through;
+}
+
+.order-card-footer {
+  padding: 8px 12px;
+  border-top: 1px solid #f0f0f0;
+  text-align: center;
+}
+
+.order-detail-btn {
+  background: none;
+  border: none;
+  color: #409eff;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 12px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.order-detail-btn:hover {
+  background: #ecf5ff;
+  color: #66b1ff;
 }
 
 .msg-time {

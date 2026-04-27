@@ -14,99 +14,104 @@
       class="sidebar-menu"
       router
     >
-      <el-menu-item index="/home">
+      <el-menu-item v-if="hasPermission('dashboard:view')" index="/home">
         <el-icon><HomeFilled /></el-icon>
         <span>首页</span>
       </el-menu-item>
 
-      <el-menu-item index="/ad" @click="emitMenuClick('/ad')">
+      <el-menu-item v-if="hasPermission('ad:view')" index="/ad" @click="emitMenuClick('/ad')">
         <el-icon><Monitor /></el-icon>
         <span>广告管理</span>
       </el-menu-item>
 
-      <el-menu-item index="/category">
+      <el-menu-item v-if="hasPermission('category:view')" index="/category">
         <el-icon><Folder /></el-icon>
         <span>类目管理</span>
       </el-menu-item>
 
-      <el-sub-menu index="product-group">
+      <el-sub-menu v-if="hasAnyChildPermission(['product:list:view', 'product:stock:view', 'product:stock:log:view'])" index="product-group">
         <template #title>
           <el-icon><Box /></el-icon>
           <span>商品管理</span>
         </template>
-        <el-menu-item index="/product/list">
+        <el-menu-item v-if="hasPermission('product:list:view')" index="/product/list">
           <el-icon><Document /></el-icon>
           <span>商品列表</span>
         </el-menu-item>
-        <el-menu-item index="/stock/manage">
+        <el-menu-item v-if="hasPermission('product:stock:view')" index="/stock/manage">
           <el-icon><DataAnalysis /></el-icon>
           <span>库存管理</span>
         </el-menu-item>
-        <el-menu-item index="/stock/log">
+        <el-menu-item v-if="hasPermission('product:stock:log:view')" index="/stock/log">
           <el-icon><Tickets /></el-icon>
           <span>库存日志</span>
         </el-menu-item>
       </el-sub-menu>
 
-      <el-menu-item index="/comment">
+      <el-menu-item v-if="hasPermission('comment:view')" index="/comment">
         <el-icon><Star /></el-icon>
         <span>评价管理</span>
       </el-menu-item>
 
-      <el-sub-menu index="freight-group">
+      <el-sub-menu v-if="hasAnyChildPermission(['freight:template:view', 'freight:rule:view'])" index="freight-group">
         <template #title>
           <el-icon><SetUp /></el-icon>
           <span>运费管理</span>
         </template>
-        <el-menu-item index="/freight/template">
+        <el-menu-item v-if="hasPermission('freight:template:view')" index="/freight/template">
           <el-icon><Files /></el-icon>
           <span>运费模板</span>
         </el-menu-item>
-        <el-menu-item index="/freight/rule">
+        <el-menu-item v-if="hasPermission('freight:rule:view')" index="/freight/rule">
           <el-icon><Setting /></el-icon>
           <span>运费规则</span>
         </el-menu-item>
       </el-sub-menu>
 
-      <el-menu-item index="/order">
+      <el-menu-item v-if="hasPermission('order:view')" index="/order">
         <el-icon><Tickets /></el-icon>
         <span>订单管理</span>
       </el-menu-item>
 
-      <el-menu-item index="/topic">
+      <el-menu-item v-if="hasPermission('topic:view')" index="/topic">
         <el-icon><Star /></el-icon>
         <span>专题管理</span>
       </el-menu-item>
 
-      <el-menu-item index="/user">
+      <el-menu-item v-if="hasPermission('user:view')" index="/user">
         <el-icon><User /></el-icon>
         <span>用户管理</span>
       </el-menu-item>
 
-      <el-sub-menu index="marketing-group">
+      <el-menu-item v-if="hasPermission('system:admin:view')" index="/employee">
+        <el-icon><UserFilled /></el-icon>
+        <span>员工管理</span>
+      </el-menu-item>
+
+      <el-sub-menu v-if="hasAnyChildPermission(['marketing:member:view', 'marketing:coupon:view', 'marketing:point:log:view', 'marketing:coupon:log:view'])" index="marketing-group">
         <template #title>
           <el-icon><Present /></el-icon>
           <span>营销中心</span>
         </template>
-        <el-menu-item index="/marketing/member">
+        <el-menu-item v-if="hasPermission('marketing:member:view')" index="/marketing/member">
           <el-icon><UserFilled /></el-icon>
           <span>会员权益管理</span>
         </el-menu-item>
-        <el-menu-item index="/marketing/coupon-template">
+        <el-menu-item v-if="hasPermission('marketing:coupon:view')" index="/marketing/coupon-template">
           <el-icon><Tickets /></el-icon>
           <span>优惠券模版管理</span>
         </el-menu-item>
-        <el-menu-item index="/marketing/point-log">
+        <el-menu-item v-if="hasPermission('marketing:point:log:view')" index="/marketing/point-log">
           <el-icon><DataAnalysis /></el-icon>
           <span>积分日志</span>
         </el-menu-item>
-        <el-menu-item index="/marketing/coupon-log">
+        <el-menu-item v-if="hasPermission('marketing:coupon:log:view')" index="/marketing/coupon-log">
           <el-icon><Document /></el-icon>
           <span>优惠券日志</span>
         </el-menu-item>
       </el-sub-menu>
 
-      <el-menu-item index="/customer-service">
+      <el-menu-item v-if="hasPermission('service:view')" index="/customer-service">
         <el-icon><Message /></el-icon>
         <span>客服中心</span>
       </el-menu-item>
@@ -140,7 +145,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   HomeFilled,
@@ -162,12 +167,28 @@ import {
 
 const router = useRouter()
 
+// 权限判断函数
+const hasPermission = (permission) => {
+  const permissions = JSON.parse(sessionStorage.getItem('permissions') || '[]')
+  return permissions.includes(permission)
+}
+
+// 判断子菜单是否有至少一个权限
+const hasAnyChildPermission = (permissions) => {
+  return permissions.some(p => hasPermission(p))
+}
+
 function handleCommand(command) {
   if (command === 'logout') {
     try {
       sessionStorage.removeItem('token')
       sessionStorage.removeItem('authToken')
       sessionStorage.removeItem('userInfo')
+      sessionStorage.removeItem('permissions')
+      sessionStorage.removeItem('roleCode')
+      sessionStorage.removeItem('roleName')
+      sessionStorage.removeItem('realName')
+      sessionStorage.removeItem('username')
     } catch (e) {}
     router.push('/login')
   } else if (command === 'profile') {

@@ -59,7 +59,8 @@ import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Reading, UserFilled, Lock } from '@element-plus/icons-vue'
-import axios from 'axios'
+import request from '@/utils/request'
+
 const router = useRouter()
 const loginFormRef = ref(null)
 const loading = ref(false)
@@ -86,26 +87,21 @@ const handleLogin = async () => {
     
     // 调用后端登录接口
     console.log('登录请求参数:', loginForm)
-    const response = await axios.post('/admin/admin/login', loginForm, {
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
+    const response = await request.post('/admin/admin/login', loginForm)
     console.log('登录响应:', response)
-    console.log('响应数据:', response.data)
-    console.log('响应状态码:', response.status)
-    console.log('响应数据类型:', typeof response.data)
-    console.log('响应数据是否有code字段:', 'code' in response.data)
-    console.log('响应数据的code值:', response.data.code)
     
     // 检查响应数据格式（后端使用code=1表示成功）
-    if (response.data && response.data.code === 1) {
+    if (response && response.code === 1) {
       // 登录成功，存储token和用户名
-      const data = response.data.data
+      const data = response.data
       console.log('登录成功数据:', data)
       if (data && data.token && data.username) {
         sessionStorage.setItem('token', data.token)
         sessionStorage.setItem('username', data.username)
+        sessionStorage.setItem('realName', data.realName || '')
+        sessionStorage.setItem('roleCode', data.roleCode || '')
+        sessionStorage.setItem('roleName', data.roleName || '')
+        sessionStorage.setItem('permissions', JSON.stringify(data.permissions || []))
         ElMessage.success('登录成功')
         router.push('/home')
       } else {
@@ -114,8 +110,8 @@ const handleLogin = async () => {
       }
     } else {
       // 登录失败，显示后端返回的错误信息
-      console.log('登录失败原因:', response.data)
-      ElMessage.error(response.data.msg || '登录失败')
+      console.log('登录失败原因:', response)
+      ElMessage.error(response.msg || '登录失败')
     }
   } catch (error) {
     console.error('登录错误:', error)

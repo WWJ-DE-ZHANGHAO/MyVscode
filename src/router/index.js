@@ -15,6 +15,7 @@ import Comment from '@/views/Comment.vue'  // 评价管理页面
 import ShippingTemplate from '@/views/ShippingTemplate.vue'  // 运费模板页面
 import ShippingRule from '@/views/ShippingRule.vue'  // 运费规则页面
 import UserManager from '@/views/UserManager.vue'  // 用户管理页面
+import Employee from '@/views/Employee.vue'  // 员工管理页面
 import Topic from '@/views/Topic.vue'  // 专题管理页面
 import Dashboard from '@/views/Dashboard.vue'  // 数据统计首页
 import MemberLevel from '@/views/MemberLevel.vue'  // 会员权益管理页面
@@ -53,121 +54,133 @@ const routes = [
     path: '/home',
     name: 'Home',
     component: Dashboard,
-    meta: { title: '首页', requiresAuth: true }
+    meta: { title: '首页', requiresAuth: true, permission: 'dashboard:view' }
   },
   {
     path: '/ad',
     name: 'Ad',
-    component: Ad,  // 您已有的广告管理页面
-    meta: { title: '广告管理', requiresAuth: true }
+    component: Ad,
+    meta: { title: '广告管理', requiresAuth: true, permission: 'ad:view' }
   },
   {
     path: '/category',
     name: 'Category',
     component: Category,
-    meta: { title: '类目管理', requiresAuth: true }
+    meta: { title: '类目管理', requiresAuth: true, permission: 'category:view' }
   },
   {
     path: '/product/list',
     name: 'ProductList',
     component: ProductList,
-    meta: { title: '商品列表', requiresAuth: true }
+    meta: { title: '商品列表', requiresAuth: true, permission: 'product:list:view' }
   },
   {
     path: '/stock/manage',
     name: 'StockManage',
     component: StockManage,
-    meta: { title: '库存管理', requiresAuth: true }
+    meta: { title: '库存管理', requiresAuth: true, permission: 'product:stock:view' }
   },
   {
     path: '/stock/log',
     name: 'StockLog',
     component: StockLog,
-    meta: { title: '库存日志', requiresAuth: true }
+    meta: { title: '库存日志', requiresAuth: true, permission: 'product:stock:log:view' }
   },
   {
     path: '/comment',
     name: 'Comment',
     component: Comment,
-    meta: { title: '评价管理', requiresAuth: true }
+    meta: { title: '评价管理', requiresAuth: true, permission: 'comment:view' }
   },
   {
     path: '/freight/template',
     name: 'FreightTemplate',
     component: ShippingTemplate,
-    meta: { title: '运费模板', requiresAuth: true }
+    meta: { title: '运费模板', requiresAuth: true, permission: 'freight:template:view' }
   },
   {
     path: '/freight/rule',
     name: 'FreightRule',
     component: ShippingRule,
-    meta: { title: '运费规则', requiresAuth: true }
+    meta: { title: '运费规则', requiresAuth: true, permission: 'freight:rule:view' }
   },
   {
     path: '/order',
     name: 'Order',
     component: OrderList,
-    meta: { title: '订单管理', requiresAuth: true }
+    meta: { title: '订单管理', requiresAuth: true, permission: 'order:view' }
   },
   {
     path: '/user',
     name: 'User',
     component: UserManager,
-    meta: { title: '用户管理', requiresAuth: true }
+    meta: { title: '用户管理', requiresAuth: true, permission: 'user:view' }
+  },
+  {
+    path: '/employee',
+    name: 'Employee',
+    component: Employee,
+    meta: { title: '员工管理', requiresAuth: true, permission: 'system:admin:view' }
   },
   {
     path: '/topic',
     name: 'Topic',
     component: Topic,
-    meta: { title: '专题管理', requiresAuth: true }
+    meta: { title: '专题管理', requiresAuth: true, permission: 'topic:view' }
   },
   {
     path: '/marketing/coupon',
     name: 'CouponManage',
     component: Placeholder,
-    meta: { title: '优惠券管理', requiresAuth: true }
+    meta: { title: '优惠券管理', requiresAuth: true, permission: 'marketing:coupon:view' }
   },
   {
     path: '/marketing/member',
     name: 'MemberSystem',
     component: MemberLevel,
-    meta: { title: '会员权益管理', requiresAuth: true }
+    meta: { title: '会员权益管理', requiresAuth: true, permission: 'marketing:member:view' }
   },
   {
     path: '/marketing/coupon-template',
     name: 'CouponTemplate',
     component: CouponTemplate,
-    meta: { title: '优惠券模版管理', requiresAuth: true }
+    meta: { title: '优惠券模版管理', requiresAuth: true, permission: 'marketing:coupon:view' }
   },
   {
     path: '/marketing/point-log',
     name: 'PointLog',
     component: PointLog,
-    meta: { title: '积分日志', requiresAuth: true }
+    meta: { title: '积分日志', requiresAuth: true, permission: 'marketing:point:log:view' }
   },
   {
     path: '/marketing/coupon-log',
     name: 'CouponLog',
     component: CouponLog,
-    meta: { title: '优惠券日志', requiresAuth: true }
+    meta: { title: '优惠券日志', requiresAuth: true, permission: 'marketing:coupon:log:view' }
   },
   {
     path: '/customer-service',
     name: 'CustomerService',
     component: CustomerService,
-    meta: { title: '客服中心', requiresAuth: true }
+    meta: { title: '客服中心', requiresAuth: true, permission: 'service:view' }
   },
   {
     path: '/marketing/points',
     name: 'PointsMall',
     component: Placeholder,
-    meta: { title: '积分商城', requiresAuth: true }
+    meta: { title: '积分商城', requiresAuth: true, permission: 'marketing:point:view' }
   },
   {
     path: '/profile',
     name: 'Profile',
     component: () => import('@/views/Profile.vue'),
     meta: { title: '个人资料', requiresAuth: true }
+  },
+  {
+    path: '/403',
+    name: 'Forbidden',
+    component: () => import('@/views/403.vue'),
+    meta: { title: '无权限' }
   },
   {
     path: '/test',
@@ -208,6 +221,17 @@ router.beforeEach((to, from, next) => {
     const token = sessionStorage.getItem('token')
     console.log('路由守卫 - token:', token)
     if (token) {
+      // 需要特定权限的页面
+      if (to.meta.permission) {
+        const permissions = JSON.parse(sessionStorage.getItem('permissions') || '[]')
+        console.log('路由守卫 - 用户权限:', permissions)
+        console.log('路由守卫 - 需要权限:', to.meta.permission)
+        if (!permissions.includes(to.meta.permission)) {
+          console.log('路由守卫 - 无权限，跳转到403')
+          next('/403')
+          return
+        }
+      }
       console.log('路由守卫 - 有token，继续访问')
       next()
     } else {

@@ -11,7 +11,8 @@ export default defineConfig({
     }
   },
   server: {
-    port: 8081,
+    port: 8082,
+    open: true,
     proxy: {
       '/admin': {
         target: 'http://localhost:8080',
@@ -26,6 +27,6 @@ export default defineConfig({
     }
   },
   define: {
-    'global': 'window'
+    global: 'window'
   }
 })
