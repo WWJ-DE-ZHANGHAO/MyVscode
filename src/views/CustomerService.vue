@@ -131,36 +131,6 @@
           <button class="send-btn" @click="sendMessage">发送</button>
         </div>
       </div>
-
-      <!-- 右侧用户信息面板 -->
-      <div class="info-right" v-if="currentChatUserId">
-        <div class="info-tab">
-          <span class="active">客户信息</span>
-        </div>
-        <div class="info-form">
-          <div class="info-item">
-            <span class="label">称呼：</span>
-            <input class="input" disabled :value="`用户${currentChatUserId}`" />
-          </div>
-          <div class="info-item">
-            <span class="label">备注：</span>
-            <input class="input" placeholder="请修改客户信息" />
-          </div>
-          <div class="info-item">
-            <span class="label">姓名：</span>
-            <input class="input" placeholder="请修改客户信息" />
-          </div>
-          <div class="info-item">
-            <span class="label">地区：</span>
-            <input class="input" placeholder="请修改客户信息" />
-          </div>
-          <div class="info-item">
-            <span class="label">其他信息：</span>
-            <textarea class="textarea" placeholder="请修改客户信息"></textarea>
-          </div>
-          <button class="save-btn">保存</button>
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -991,86 +961,6 @@ onUnmounted(() => {
 }
 
 .send-btn:hover {
-  background: #40a9ff;
-}
-
-.info-right {
-  width: 280px;
-  background: #fff;
-  border-left: 1px solid #e8e8e8;
-  display: flex;
-  flex-direction: column;
-}
-
-.info-tab {
-  height: 50px;
-  border-bottom: 1px solid #e8e8e8;
-  display: flex;
-  align-items: center;
-  padding: 0 15px;
-}
-
-.info-tab span {
-  padding: 8px 12px;
-  cursor: pointer;
-  font-size: 14px;
-  color: #666;
-}
-
-.info-tab .active {
-  color: #1890ff;
-  border-bottom: 2px solid #1890ff;
-  font-weight: 500;
-}
-
-.info-form {
-  flex: 1;
-  padding: 20px 15px;
-  overflow-y: auto;
-}
-
-.info-item {
-  margin-bottom: 15px;
-}
-
-.label {
-  display: block;
-  font-size: 12px;
-  color: #666;
-  margin-bottom: 4px;
-}
-
-.input, .textarea {
-  width: 100%;
-  border: 1px solid #e8e8e8;
-  border-radius: 4px;
-  padding: 6px 10px;
-  font-size: 14px;
-  outline: none;
-}
-
-.input:focus, .textarea:focus {
-  border-color: #1890ff;
-}
-
-.textarea {
-  height: 60px;
-  resize: none;
-}
-
-.save-btn {
-  width: 100%;
-  height: 36px;
-  background: #1890ff;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  margin-top: 10px;
-}
-
-.save-btn:hover {
   background: #40a9ff;
 }
 </style>

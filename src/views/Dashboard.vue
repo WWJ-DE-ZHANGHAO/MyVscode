@@ -77,10 +77,10 @@ import request from '@/utils/request'
 
 
 // 营业额分析标签
-const salesTab = ref('month')
+const salesTab = ref('yesterday')
 
 // 用户分析标签
-const userTab = ref('month')
+const userTab = ref('yesterday')
 
 // 图表引用
 const salesChartRef = ref(null)
@@ -203,7 +203,7 @@ const fetchTurnoverData = async (type) => {
       params: { startDate, endDate }
     })
     if (res && res.data) {
-      salesData.value.dates = res.data.map(item => item.data)
+      salesData.value.dates = res.data.map(item => item.date)
       salesData.value.sales = res.data.map(item => item.turnover)
       initSalesChart()
     }
@@ -233,6 +233,9 @@ const fetchUserData = async (type) => {
 // 初始化营业额分析图表
 const initSalesChart = () => {
   if (salesChartRef.value) {
+    if (salesChart) {
+      salesChart.dispose()
+    }
     salesChart = echarts.init(salesChartRef.value)
     const option = {
       tooltip: {
@@ -279,6 +282,9 @@ const initSalesChart = () => {
 // 初始化销量数据统计图表
 const initSalesPieChart = () => {
   if (salesPieChartRef.value) {
+    if (salesPieChart) {
+      salesPieChart.dispose()
+    }
     salesPieChart = echarts.init(salesPieChartRef.value)
     const option = {
       tooltip: {
@@ -289,6 +295,11 @@ const initSalesPieChart = () => {
         bottom: '5%',
         left: 'center'
       },
+      color: [
+        '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de',
+        '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc', '#5470c6',
+        '#91cc75', '#fac858', '#ee6666', '#73c0de'
+      ],
       series: [
         {
           name: '销量占比',
@@ -325,6 +336,9 @@ const initSalesPieChart = () => {
 // 初始化用户分析图表
 const initUserChart = () => {
   if (userChartRef.value) {
+    if (userChart) {
+      userChart.dispose()
+    }
     userChart = echarts.init(userChartRef.value)
     const currentData = userData.value[userTab.value]
     const option = {
@@ -382,6 +396,9 @@ const initUserChart = () => {
 // 初始化商品销量排行图表
 const initProductChart = () => {
   if (productChartRef.value) {
+    if (productChart) {
+      productChart.dispose()
+    }
     productChart = echarts.init(productChartRef.value)
     const option = {
       tooltip: {

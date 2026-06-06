@@ -121,7 +121,13 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="scope">
-            <el-button size="small" @click="handleAudit(getCommentData(scope.row))">审核</el-button>
+            <el-button 
+              size="small" 
+              @click="handleAudit(getCommentData(scope.row))"
+              :disabled="getCommentData(scope.row).auditStatus === 1 || getCommentData(scope.row).auditStatus === 2"
+            >
+              {{ getCommentData(scope.row).auditStatus === 1 || getCommentData(scope.row).auditStatus === 2 ? '已审核' : '审核' }}
+            </el-button>
             <el-button size="small" type="primary" @click="handleReply(getCommentData(scope.row))">回复</el-button>
           </template>
         </el-table-column>
@@ -518,7 +524,7 @@ const handleConfirmReply = async () => {
   }
   
   try {
-    await request.post('/admin/comment/reply/', {
+    await request.post('/admin/comment/reply', {
       commentId: replyForm.commentId,
       reply: replyForm.reply
     })
