@@ -33,9 +33,9 @@
 
             <div class="card-footer">
               <div class="card-actions" :class="{ visible: hoveredCardId === addr.id || activeCardId === addr.id }">
-                <el-button type="link" size="small" @click.stop="editAddress(addr)">编辑</el-button>
-                <el-button type="link" size="small" @click.stop="deleteAddress(addr)">删除</el-button>
-                <el-button v-if="!addr.isDefault" type="link" size="small" @click.stop="setDefault(addr)">设为默认地址</el-button>
+                <el-button type="text" size="small" @click.stop="editAddress(addr)">编辑</el-button>
+                <el-button type="text" size="small" @click.stop="deleteAddress(addr)">删除</el-button>
+                <el-button v-if="!addr.isDefault" type="text" size="small" @click.stop="setDefault(addr)">设为默认地址</el-button>
               </div>
 
               <div class="default-indicator" v-if="addr.isDefault">
@@ -141,9 +141,9 @@
               <div v-if="coupons.length === 0" class="coupon-empty">
                 优惠券为空
               </div>
-              <div v-else class="coupon-item" v-for="(coupon, index) in coupons" :key="index" :class="{ 'coupon-disabled': !coupon.available }">
+              <div v-else class="coupon-item" v-for="(coupon, index) in coupons" :key="coupon.couponRecordId" :class="{ 'coupon-disabled': !coupon.available }">
                   <div class="coupon-select">
-                    <el-radio v-model="selectedCoupon" :label="coupon.value" :disabled="!coupon.available"></el-radio>
+                    <el-radio v-model="selectedCoupon" :label="coupon.couponRecordId" :disabled="!coupon.available">&nbsp;</el-radio>
                   </div>
                   <div class="coupon-content">
                     <div class="coupon-header">
@@ -264,17 +264,18 @@ import { watch } from 'vue';
 watch(selectedCoupon, (newValue) => {
   if (newValue) {
     // 找到对应的优惠券对象，获取couponRecordId
-    const selectedCouponObj = coupons.value.find(coupon => coupon.value === newValue);
+    const selectedCouponObj = coupons.value.find(coupon => coupon.couponRecordId === newValue);
     if (selectedCouponObj) {
       selectedCouponRecordId.value = selectedCouponObj.couponRecordId;
-    }
-    // 提取折扣金额
-    if (newValue.startsWith('¥')) {
-      selectedCouponValue.value = parseFloat(newValue.replace('¥', '')) || 0;
-    } else if (newValue.endsWith('折')) {
-      // 折扣券计算折扣金额
-      const discountRate = parseFloat(newValue.replace('折', '')) / 10;
-      selectedCouponValue.value = displayedOriginalTotal.value * (1 - discountRate);
+      // 提取折扣金额
+      const val = selectedCouponObj.value;
+      if (val.startsWith('¥')) {
+        selectedCouponValue.value = parseFloat(val.replace('¥', '')) || 0;
+      } else if (val.endsWith('折')) {
+        // 折扣券计算折扣金额
+        const discountRate = parseFloat(val.replace('折', '')) / 10;
+        selectedCouponValue.value = displayedOriginalTotal.value * (1 - discountRate);
+      }
     }
   } else {
     selectedCouponValue.value = 0;

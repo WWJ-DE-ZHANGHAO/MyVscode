@@ -121,7 +121,7 @@ const currentPage = ref(1);
 const pageSize = ref(20);
 
 // 筛选条件
-const selectedCategoryId = ref(10); // 10表示全部
+const selectedCategoryId = ref(0); // 0表示全部
 const minPrice = ref('');
 const maxPrice = ref('');
 const sortBy = ref('default');
@@ -129,7 +129,7 @@ const priceWarning = ref(false);
 
 // 检查登录状态
 const checkLoginStatus = () => {
-  const token = sessionStorage.getItem('token');
+  const token = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
   isLoggedIn.value = !!token;
   console.log('登录状态:', isLoggedIn.value ? '已登录' : '未登录');
   return isLoggedIn.value;
@@ -141,13 +141,17 @@ const fetchCategories = async () => {
   try {
     const categoryList = await request.get('/user/category/list');
     if (Array.isArray(categoryList)) {
-      categories.value = categoryList.filter(cat => cat.status === true || cat.status === 1);
+      // 在分类列表最前面添加"全部"选项
+      categories.value = [
+        { id: 0, name: '全部' },
+        ...categoryList.filter(cat => cat.status === true || cat.status === 1)
+      ];
     } else {
-      categories.value = [];
+      categories.value = [{ id: 0, name: '全部' }];
     }
   } catch (e) {
     console.error('获取分类列表失败:', e);
-    categories.value = [];
+    categories.value = [{ id: 0, name: '全部' }];
   }
 };
 
@@ -159,10 +163,13 @@ const fetchBooks = async () => {
     const params = {
       pageNo: currentPage.value,
       pageSize: pageSize.value,
-      categoryId: selectedCategoryId.value,
       minBalance: minPrice.value === '' ? 0 : parseInt(minPrice.value),
       maxBalance: maxPrice.value === '' ? 999999 : parseInt(maxPrice.value)
     };
+    // categoryId为0表示"全部"，不传categoryId参数
+    if (selectedCategoryId.value !== 0) {
+      params.categoryId = selectedCategoryId.value;
+    }
     if (sortBy.value === 'price-asc') {
       params.sortBy = 'price';
       params.asc = true;

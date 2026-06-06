@@ -86,6 +86,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ShoppingCart, Headset } from '@element-plus/icons-vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
+import request from '@/utils/request';
 // 1. 引入 BackToTop、CartPanel 组件
 import BackToTop from '@/components/BackToTop.vue';
 import ServiceDialog from '@/components/ServiceDialog.vue';
@@ -173,16 +174,29 @@ const handleServiceClick = () => {
   serviceDialogVisible.value = true;
 };
 
-const logout = () => {
+const logout = async () => {
   try {
-    sessionStorage.removeItem('token');
-    sessionStorage.removeItem('currentUser');
-  } catch (e) {}
+    // 先调用后端退出接口，清除Redis中的Refresh Token（请求拦截器会自动携带当前token）
+    await request.post('/user/user/logout');
+  } catch (e) {
+    // 即使后端请求失败，也清除本地token
+  }
+  
+  // 清除双Token（localStorage）
+  localStorage.removeItem('accessToken');
+  localStorage.removeItem('refreshToken');
+  localStorage.removeItem('tokenType');
+  // 清除旧版token（sessionStorage）
+  sessionStorage.removeItem('token');
+  sessionStorage.removeItem('currentUser');
+  
   currentUser.value = null;
   avatarUrl.value = defaultAvatar;
   window.dispatchEvent(new Event('user-updated'));
   ElMessage.success('已退出登录');
-  router.push('/');
+  
+  // 刷新页面，重新加载首页数据（广告等）
+  window.location.href = '/';
 };
 
 const handleAvatarClick = () => {

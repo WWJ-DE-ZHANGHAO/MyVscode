@@ -219,7 +219,7 @@
           <div v-show="activeMainTab === 'coupon'" class="tab-content">
             <h2 class="title">我的优惠券</h2>
             <div class="coupon-list">
-              <div v-for="c in userCoupons" :key="c.id" class="coupon-item">
+              <div v-for="c in userCoupons" :key="c.id" class="coupon-item" :class="{ 'coupon-used': c.status === 1 }">
                 <div class="left">
                   <div class="price">¥{{ c.discountValue }}</div>
                   <div class="rule">{{ c.type === 1 ? `满${c.minOrderAmount}可用` : '' }}</div>
@@ -227,31 +227,13 @@
                 <div class="right">
                   <div class="name">{{ c.name }}</div>
                   <div class="time">有效期: {{ formatCouponDate(c.validStartTime) }}至{{ formatCouponDate(c.validEndTime) }}</div>
-                  <el-button size="small" type="primary">立即使用</el-button>
+                  <span v-if="c.status === 1" class="used-tag">已使用</span>
                 </div>
               </div>
               <el-empty v-if="userCoupons.length === 0" description="暂无优惠券" />
             </div>
           </div>
 
-          <!-- 浏览历史 -->
-          <div v-show="activeMainTab === 'history'" class="tab-content">
-            <div class="history-header">
-              <h3>最近浏览</h3>
-              <el-button link type="danger" @click="clearHistory">清空历史</el-button>
-            </div>
-            <div class="history-list">
-              <div v-for="item in historyList" :key="item.id" class="history-item">
-                <img :src="item.cover" alt="商品" />
-                <div class="info">
-                  <div class="name">{{ item.productName }}</div>
-                  <div class="price">¥{{ item.price }}</div>
-                </div>
-                <el-button link type="danger" size="small" @click="delHistory(item.id)">删除</el-button>
-              </div>
-              <el-empty v-if="historyList.length === 0" description="暂无浏览记录" />
-            </div>
-          </div>
         </section>
       </div>
     </div>
@@ -400,8 +382,7 @@ const loadCurrentUser = () => {
 const emit = defineEmits(['addToCart'])
 
 // 上传需要的 token（用于 el-upload headers）
-// 使用项目统一的 key：`token`
-const token = ref(sessionStorage.getItem('token') || '')
+const token = ref(sessionStorage.getItem('accessToken') || sessionStorage.getItem('token') || '')
 
 onMounted(async () => {
   // 每次进入或刷新个人中心，主动从后端拉取用户信息与订单列表
@@ -485,7 +466,6 @@ const sidebarMenus = ref([
   { name: 'addresses', label: '收货地址', icon: Location },
   { name: 'member', label: '会员中心', icon: Medal },
   { name: 'coupon', label: '我的优惠券', icon: Coupon },
-  { name: 'history', label: '浏览历史', icon: Clock },
 ])
 
 const activeMainTab = ref('orders')
@@ -1115,14 +1095,6 @@ const expPercent = computed(() => (userInfoRef.member_exp / nextLevelExp.value) 
 
 // ============== 优惠券 =
 
-// ============== 浏览历史 ==============
-const historyList = ref([
-  { id: 1, productName: 'Vue实战教程', price: 89.9, cover: 'https://via.placeholder.com/60x80' },
-  { id: 2, productName: 'Java编程思想', price: 108.0, cover: 'https://via.placeholder.com/60x80' },
-])
-
-const delHistory = (id) => { historyList.value = historyList.value.filter(i => i.id !== id) }
-const clearHistory = () => { historyList.value = [] }
 </script>
 
 <style scoped>
@@ -1221,6 +1193,24 @@ const clearHistory = () => { historyList.value = [] }
   font-size: 12px;
   padding: 4px 12px;
   height: auto;
+}
+.coupon-item.coupon-used {
+  filter: grayscale(100%);
+  opacity: 0.6;
+}
+.coupon-item .used-tag {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) rotate(-15deg);
+  font-size: 24px;
+  color: #ff4d4f;
+  font-weight: bold;
+  border: 2px solid #ff4d4f;
+  padding: 4px 16px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.8);
+  pointer-events: none;
 }
 
 /* 退款申请弹窗样式 */

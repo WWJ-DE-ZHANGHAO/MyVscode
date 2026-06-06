@@ -83,10 +83,10 @@
           <div class="custom-quantity">
             <button 
               class="quantity-btn quantity-btn-left" 
-              @click="increaseQuantity"
-              :disabled="!hasStock || quantity >= maxQuantity"
+              @click="decreaseQuantity"
+              :disabled="!hasStock || quantity <= 1"
             >
-              +
+              -
             </button>
             <input 
               type="number" 
@@ -99,10 +99,10 @@
             />
             <button 
               class="quantity-btn quantity-btn-right" 
-              @click="decreaseQuantity"
-              :disabled="!hasStock || quantity <= 1"
+              @click="increaseQuantity"
+              :disabled="!hasStock || quantity >= maxQuantity"
             >
-              -
+              +
             </button>
           </div>
           <span class="stock-status" :class="{ 'out-of-stock': !hasStock }">

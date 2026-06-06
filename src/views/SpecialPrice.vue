@@ -61,6 +61,7 @@
         <CategoryNavigation 
           title="分类导航"
           :categories="specialCategories"
+          theme="special"
         />
       </div>
     </div>

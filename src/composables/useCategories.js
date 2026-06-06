@@ -7,8 +7,8 @@ export const categoryMap = ref({})
 
 export const loadCategories = async () => {
   try {
-    // 检查是否已登录
-    const token = sessionStorage.getItem('token')
+    // 检查是否已登录（兼容双Token和旧版单Token）
+    const token = sessionStorage.getItem('accessToken') || sessionStorage.getItem('token');
     if (!token) {
       // 未登录时使用模拟数据
       const mockCategories = [
@@ -29,7 +29,7 @@ export const loadCategories = async () => {
       return categories.value
     }
     
-    // 已登录时发送请求
+    // 已登录时发送请求（每次都从后端获取最新数据，不使用缓存）
     const res = await request.get('/user/category/list')
     // debug the raw response shape
     try { console.debug('loadCategories raw response:', res) } catch (e) {}

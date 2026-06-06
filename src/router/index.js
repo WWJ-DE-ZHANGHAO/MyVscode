@@ -42,17 +42,21 @@ const router = createRouter({
   routes,
 })
 
-// 可选：如果需要登录保护，可以保留一个简单的认证守卫
 // 全局路由守卫：除登录/注册外均需登录
 router.beforeEach((to, from, next) => {
-  const token = sessionStorage.getItem('token')
+  // 兼容双Token和旧版单Token
+  const accessToken = sessionStorage.getItem('accessToken')
+  const oldToken = sessionStorage.getItem('token')
   const publicPaths = ['/login', '/register']
+  
+  // 公开路径直接放行
   if (publicPaths.includes(to.path)) {
     next()
     return
   }
-  if (!token) {
-    // 带上重定向信息，登录后返回原路径
+  
+  // 未登录则强制跳转登录页
+  if (!accessToken && !oldToken) {
     next({ path: '/login', query: { redirect: to.fullPath } })
   } else {
     next()

@@ -1,5 +1,5 @@
 <template>
-  <div class="category-nav" v-show="isVisible">
+  <div class="category-nav" :class="`theme-${theme}`" v-show="isVisible">
     <h3 class="nav-title">{{ title }}</h3>
     <div class="nav-grid">
       <div 
@@ -25,6 +25,10 @@ const props = defineProps({
   categories: {
     type: Array,
     default: () => []
+  },
+  theme: {
+    type: String,
+    default: 'default' // default, special, newbook
   }
 });
 
@@ -71,33 +75,102 @@ onUnmounted(() => {
 
 <style scoped>
 .category-nav {
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-  padding: 12px;
+  border-radius: 12px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  padding: 16px;
   position: fixed;
   top: 100px;
   right: 50px;
-  z-index: 101; /* 高于顶部导航栏的z-index: 100 */
+  z-index: 101;
   width: auto;
   min-width: 280px;
   max-width: 90%;
+  backdrop-filter: blur(10px);
+  transition: all 0.3s ease;
+}
+
+/* 特价页主题 - 紫色渐变 */
+.category-nav.theme-special {
+  background: linear-gradient(135deg, rgba(186, 104, 200, 0.95) 0%, rgba(142, 36, 170, 0.95) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.category-nav.theme-special .nav-title {
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.category-nav.theme-special .nav-item {
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(5px);
+}
+
+.category-nav.theme-special .nav-item:hover {
+  background: rgba(255, 255, 255, 0.3);
+  border-color: rgba(255, 255, 255, 0.5);
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+}
+
+.category-nav.theme-special .nav-text {
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* 新书页主题 - 暖黄渐变 */
+.category-nav.theme-newbook {
+  background: linear-gradient(135deg, rgba(255, 224, 130, 0.95) 0%, rgba(255, 202, 40, 0.95) 100%);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+
+.category-nav.theme-newbook .nav-title {
+  color: #fff;
+  border-bottom-color: rgba(255, 255, 255, 0.3);
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.category-nav.theme-newbook .nav-item {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(5px);
+}
+
+.category-nav.theme-newbook .nav-item:hover {
+  background: rgba(255, 255, 255, 0.4);
+  border-color: rgba(255, 255, 255, 0.6);
+  transform: scale(1.08);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+.category-nav.theme-newbook .nav-text {
+  color: #fff;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+}
+
+/* 默认主题 */
+.category-nav.theme-default {
+  background: #ffffff;
 }
 
 .nav-title {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
-  margin: 0 0 12px 0;
+  margin: 0 0 14px 0;
   color: #333;
   text-align: center;
-  padding-bottom: 8px;
+  padding-bottom: 10px;
   border-bottom: 2px solid #f0f0f0;
+  letter-spacing: 1px;
 }
 
 .nav-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 6px;
+  gap: 8px;
   min-width: 280px;
 }
 
@@ -107,7 +180,7 @@ onUnmounted(() => {
   justify-content: center;
   width: 100%;
   aspect-ratio: 1;
-  border-radius: 4px;
+  border-radius: 8px;
   cursor: pointer;
   transition: all 0.3s ease;
   background: #f9f9f9;
@@ -120,7 +193,7 @@ onUnmounted(() => {
 }
 
 .nav-text {
-  font-size: 11px;
+  font-size: 12px;
   color: #666;
   font-weight: 500;
   text-align: center;

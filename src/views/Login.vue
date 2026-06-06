@@ -134,8 +134,8 @@ const doPasswordLogin = async () => {
       username: username.value, 
       password: password.value 
     });
-    if (userData && userData.token) {
-      sessionStorage.setItem('token', userData.token);
+    // 兼容双Token响应格式
+    if (userData && (userData.accessToken || userData.token)) {
       const userToSave = { username: userData.username, avatar: userData.avatar };
       saveCurrentUser(userToSave);
       window.dispatchEvent(new Event('user-updated'));
@@ -166,8 +166,8 @@ const doSmsLogin = async () => {
   if (!phone.value || !code.value) { ElMessage.warning('请填写手机号和验证码'); return; }
   try {
     const userData = await request.post('/user/user/login', { phone: phone.value, code: code.value });
-    if (userData && userData.token) {
-      sessionStorage.setItem('token', userData.token);
+    // 兼容双Token响应格式
+    if (userData && (userData.accessToken || userData.token)) {
       const userToSave = { username: userData.username, avatar: userData.avatar };
       saveCurrentUser(userToSave);
       window.dispatchEvent(new Event('user-updated'));

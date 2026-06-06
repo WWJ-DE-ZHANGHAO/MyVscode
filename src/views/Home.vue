@@ -162,13 +162,14 @@ const isLoggedIn = ref(false);
 
 // 检查登录状态
 const checkLoginStatus = () => {
-  const token = sessionStorage.getItem('token');
-  isLoggedIn.value = !!token;
+  // 兼容双Token和旧版单Token
+  const accessToken = sessionStorage.getItem('accessToken');
+  const oldToken = sessionStorage.getItem('token');
+  isLoggedIn.value = !!(accessToken || oldToken);
   console.log('========== 首页加载 ==========');
   console.log('登录状态:', isLoggedIn.value ? '已登录' : '未登录');
-  if (token) {
-    console.log('Token存在，长度:', token.length);
-    console.log('Token前20位:', token.substring(0, 20) + '...');
+  if (accessToken) {
+    console.log('accessToken存在，长度:', accessToken.length);
   }
   return isLoggedIn.value;
 };

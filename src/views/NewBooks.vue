@@ -63,6 +63,7 @@
         <CategoryNavigation 
           title="分类导航"
           :categories="dynamicCategories"
+          theme="newbook"
         />
       </div>
     </div>

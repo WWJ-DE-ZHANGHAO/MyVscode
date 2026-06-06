@@ -242,7 +242,7 @@ const fetchOrders = async () => {
   
   orderLoading.value = true;
   try {
-    const response = await fetch('http://localhost:8080/user/order/historyOrders', {
+    const response = await fetch('/user/order/historyOrders', {
       method: 'GET',
       headers: {
         'token': token,
@@ -325,15 +325,9 @@ watch(showOrderDialog, (newVal) => {
 
 // 获取 token 的函数
 const getToken = () => {
-  let token = sessionStorage.getItem('authentication');
+  let token = sessionStorage.getItem('accessToken');
   if (!token) {
     token = sessionStorage.getItem('token');
-  }
-  if (!token) {
-    token = localStorage.getItem('authentication');
-  }
-  if (!token) {
-    token = localStorage.getItem('token');
   }
   return token;
 };
